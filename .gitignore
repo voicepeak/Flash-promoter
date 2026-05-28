@@ -9,3 +9,5 @@ data/
 *.sqlite
 *.sqlite-*
 *.log
+.agents/
+skills-lock.json
