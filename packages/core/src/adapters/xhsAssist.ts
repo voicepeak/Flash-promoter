@@ -1,6 +1,7 @@
 import type { PlatformAdapter } from "./types.js";
 import type { PlatformAccount, PublishMode } from "../models.js";
-import { createDraftBase, enforceNoDirectPublish, firstSentences, originalPlainText, selectTags, simulatedResult, validateWithLimits } from "./common.js";
+import { generateStructuredPlatformAdaptation } from "../ai/local.js";
+import { createDraftBase, enforceNoDirectPublish, simulatedResult, validateWithLimits } from "./common.js";
 
 export const xhsAssistAdapter: PlatformAdapter = {
   id: "xhs-assist",
@@ -13,16 +14,15 @@ export const xhsAssistAdapter: PlatformAdapter = {
     contentTypes: ["image-note", "article", "video"]
   },
   async transform(input) {
-    const sentences = firstSentences(input, 8);
-    const shortBody = sentences.map((sentence) => sentence.replace(/[。；;]/g, "")).join("\n");
-    const cardTexts = [input.title, ...sentences.slice(0, 5), input.summary || originalPlainText(input).slice(0, 80)];
-    return createDraftBase("xhs-assist", input, input.title.slice(0, 20), shortBody, {
-      hashtags: selectTags(input, ["创作", "内容运营"], 8).map((tag) => `#${tag}`),
-      coverText: input.title.slice(0, 14),
-      cardTexts,
-      emojiLevel: "none",
+    const adaptation = generateStructuredPlatformAdaptation(input).xiaohongshu;
+    return createDraftBase("xhs-assist", input, adaptation.title, adaptation.content, {
+      hashtags: adaptation.hashtags,
+      coverText: adaptation.coverText,
+      cardTexts: adaptation.cardTexts,
+      emojiLevel: adaptation.emojiLevel,
       assistUrl: "https://creator.xiaohongshu.com/",
-      riskNotes: ["辅助发布不自动点击最终发布按钮，不提供规避风控建议。"]
+      riskNotes: adaptation.riskNotes,
+      structuredSource: "local-json-schema"
     });
   },
   async validate(draft) {
@@ -40,7 +40,23 @@ export const xhsAssistAdapter: PlatformAdapter = {
     }
 
     if (mode === "assist") {
-      return simulatedResult("xhs-assist", mode, "assist_opened", "小红书辅助发布已模拟打开；用户需自行检查并手动发布。");
+      return {
+        ...simulatedResult("xhs-assist", mode, "assist_opened", "小红书辅助发布材料已生成；用户需自行检查并手动发布。"),
+        url: String(draft.platformMeta.assistUrl ?? "https://creator.xiaohongshu.com/"),
+        raw: {
+          simulated: true,
+          realPlatformCalled: false,
+          browserAssistPackage: {
+            openUrl: draft.platformMeta.assistUrl,
+            title: draft.title,
+            body: draft.body,
+            hashtags: draft.platformMeta.hashtags,
+            coverText: draft.platformMeta.coverText,
+            cardTexts: draft.platformMeta.cardTexts,
+            finalPublishAction: "manual-only"
+          }
+        }
+      };
     }
 
     return simulatedResult("xhs-assist", mode, "simulated", "小红书发布已模拟，未调用真实平台能力。");

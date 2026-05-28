@@ -1,6 +1,7 @@
 import type { PlatformAdapter } from "./types.js";
 import type { PlatformAccount, PublishMode } from "../models.js";
-import { createDraftBase, enforceNoDirectPublish, originalMarkdown, selectTags, simulatedResult, validateWithLimits } from "./common.js";
+import { generateStructuredPlatformAdaptation } from "../ai/local.js";
+import { createDraftBase, enforceNoDirectPublish, simulatedResult, validateWithLimits } from "./common.js";
 
 export const zhihuAssistAdapter: PlatformAdapter = {
   id: "zhihu-assist",
@@ -13,12 +14,14 @@ export const zhihuAssistAdapter: PlatformAdapter = {
     contentTypes: ["article", "qa-answer"]
   },
   async transform(input) {
-    return createDraftBase("zhihu-assist", input, input.title.replace(/[！!]{2,}/g, "！"), originalMarkdown(input), {
-      topics: selectTags(input, ["内容创作"], 5),
-      answerStyle: "article",
+    const adaptation = generateStructuredPlatformAdaptation(input).zhihu;
+    return createDraftBase("zhihu-assist", input, adaptation.title, adaptation.bodyMarkdown, {
+      topics: adaptation.topics,
+      answerStyle: adaptation.answerStyle,
       logicHints: ["保留原文事实", "减少营销口吻", "突出问题与论证结构"],
       assistUrl: "https://www.zhihu.com/write",
-      riskNotes: ["辅助发布只打开和填充页面，用户需要自行登录并手动点击发布。"]
+      riskNotes: adaptation.riskNotes,
+      structuredSource: "local-json-schema"
     });
   },
   async validate(draft) {
@@ -35,7 +38,21 @@ export const zhihuAssistAdapter: PlatformAdapter = {
     }
 
     if (mode === "assist") {
-      return simulatedResult("zhihu-assist", mode, "assist_opened", "知乎辅助发布已模拟打开；不会绕过登录、验证码或点击最终发布按钮。");
+      return {
+        ...simulatedResult("zhihu-assist", mode, "assist_opened", "知乎辅助发布材料已生成；用户需自行登录、检查内容并手动点击发布。"),
+        url: String(draft.platformMeta.assistUrl ?? "https://www.zhihu.com/write"),
+        raw: {
+          simulated: true,
+          realPlatformCalled: false,
+          browserAssistPackage: {
+            openUrl: draft.platformMeta.assistUrl,
+            title: draft.title,
+            body: draft.body,
+            topics: draft.platformMeta.topics,
+            finalPublishAction: "manual-only"
+          }
+        }
+      };
     }
 
     return simulatedResult("zhihu-assist", mode, "simulated", "知乎发布已模拟，未调用真实平台能力。");

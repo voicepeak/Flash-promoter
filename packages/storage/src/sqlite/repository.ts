@@ -5,6 +5,7 @@ import type {
   Asset,
   CanonicalPost,
   PlatformDraft,
+  PlatformDraftUpdate,
   PlatformId,
   PublishJob,
   PublishLog,
@@ -164,6 +165,24 @@ export class FlashPromoterRepository {
     return updated;
   }
 
+  updatePlatformDraft(draftId: string, update: PlatformDraftUpdate, status = "edited"): PlatformDraft | null {
+    const draft = this.getPlatformDraft(draftId);
+    if (!draft) {
+      return null;
+    }
+
+    const updated: PlatformDraft = {
+      ...draft,
+      ...update,
+      platformMeta: update.platformMeta ?? draft.platformMeta,
+      validation: undefined,
+      updatedAt: now()
+    };
+
+    this.savePlatformDraft(updated, update.userConfirmed ? "confirmed" : status);
+    return updated;
+  }
+
   createPublishJob(input: {
     postId: string;
     draftId: string;
@@ -288,7 +307,7 @@ export class FlashPromoterRepository {
     return {
       id: row.id,
       postId: row.post_id,
-      draftId: "",
+      draftId: row.result_json ? ((JSON.parse(row.result_json) as PublishResult).draftId ?? "") : "",
       platform: row.platform,
       mode: row.mode,
       status: row.status,

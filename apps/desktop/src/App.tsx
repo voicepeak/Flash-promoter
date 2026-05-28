@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { AlertCircle, FileText, Settings, UploadCloud } from "lucide-react";
-import type { Asset, PlatformDraft, PlatformId, PublishJob, PublishLog, PublishMode } from "@flash-promoter/core";
-import { defaultPublishMode, platformLabels } from "@flash-promoter/core";
+import type { Asset, CanonicalPost, PlatformDraft, PlatformDraftUpdate, PlatformId, PublishJob, PublishLog, PublishMode } from "@flash-promoter/core";
+import { blocksToMarkdown, defaultPublishMode, platformLabels } from "@flash-promoter/core";
 import { api } from "./api/client.js";
 import { EditorPanel } from "./components/EditorPanel.js";
 import { PlatformPreview } from "./components/PlatformPreview.js";
@@ -34,6 +34,8 @@ export default function App() {
   const [body, setBody] = useState(sampleBody);
   const [inputFormat, setInputFormat] = useState<"markdown" | "html" | "text">("markdown");
   const [assets, setAssets] = useState<Asset[]>([]);
+  const [posts, setPosts] = useState<Array<CanonicalPost & { status: string }>>([]);
+  const [currentPostId, setCurrentPostId] = useState<string | null>(null);
   const [drafts, setDrafts] = useState<PlatformDraft[]>([]);
   const [selectedPlatform, setSelectedPlatform] = useState<PlatformId>("wechat");
   const [modes, setModes] = useState<Record<string, PublishMode>>({
@@ -51,7 +53,7 @@ export default function App() {
   const generatedPlatforms = useMemo(() => new Set(drafts.map((draft) => draft.platform)), [drafts]);
 
   useEffect(() => {
-    void refreshLogsAndJobs();
+    void refreshSideData();
   }, []);
 
   async function handleGenerate() {
@@ -70,10 +72,12 @@ export default function App() {
         inputFormat,
         assets
       });
+      setCurrentPostId(created.id);
       const generated = await api.generateDrafts(created.id, defaultPlatforms);
       setDrafts(generated.items);
       setSelectedPlatform(generated.items.find((draft) => draft.platform !== "mock")?.platform ?? "mock");
       setMessage("平台版本已生成");
+      await refreshSideData();
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "生成失败");
     } finally {
@@ -99,11 +103,15 @@ export default function App() {
     setBusy(true);
     setMessage(null);
     try {
-      await api.publishDraft(draft.id, mode, false);
-      await refreshLogsAndJobs();
+      const response = await api.publishDraft(draft.id, mode, false);
+      if (mode === "assist" && response.result?.url) {
+        window.open(response.result.url, "_blank", "noopener,noreferrer");
+        await copyAssistPackage(response.result.raw);
+      }
+      await refreshSideData();
       setMessage(`${platformLabels[draft.platform]} 发布任务已完成`);
     } catch (error) {
-      await refreshLogsAndJobs();
+      await refreshSideData();
       setMessage(error instanceof Error ? error.message : "发布失败");
     } finally {
       setBusy(false);
@@ -122,20 +130,100 @@ export default function App() {
       for (const draft of publishable) {
         await api.publishDraft(draft.id, "simulate", false);
       }
-      await refreshLogsAndJobs();
+      await refreshSideData();
       setMessage("四平台模拟发布已完成");
     } catch (error) {
-      await refreshLogsAndJobs();
+      await refreshSideData();
       setMessage(error instanceof Error ? error.message : "模拟发布失败");
     } finally {
       setBusy(false);
     }
   }
 
-  async function refreshLogsAndJobs() {
-    const [jobResult, logResult] = await Promise.all([api.jobs(), api.logs()]);
+  function handleDraftChange(draftId: string, update: PlatformDraftUpdate) {
+    setDrafts((current) =>
+      current.map((draft) =>
+        draft.id === draftId
+          ? {
+              ...draft,
+              ...update,
+              platformMeta: update.platformMeta ?? draft.platformMeta,
+              userConfirmed: update.userConfirmed ?? false,
+              validation: undefined,
+              updatedAt: Date.now()
+            }
+          : draft
+      )
+    );
+  }
+
+  async function handleSaveDraft(draft: PlatformDraft) {
+    setBusy(true);
+    setMessage(null);
+    try {
+      const saved = await api.updateDraft(draft.id, draft);
+      setDrafts((current) => current.map((item) => (item.id === draft.id ? saved.draft : item)));
+      setMessage(`${platformLabels[draft.platform]} 平台版本已保存`);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "保存平台版本失败");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleConfirmDraft(draft: PlatformDraft) {
+    setBusy(true);
+    setMessage(null);
+    try {
+      const saved = await api.updateDraft(draft.id, { ...draft, userConfirmed: true });
+      setDrafts((current) => current.map((item) => (item.id === draft.id ? saved.draft : item)));
+      setMessage(`${platformLabels[draft.platform]} 平台版本已确认`);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "确认平台版本失败");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleLoadPost(postId: string) {
+    setBusy(true);
+    setMessage(null);
+    try {
+      const result = await api.post(postId);
+      setCurrentPostId(result.post.id);
+      setTitle(result.post.title);
+      setSummary(result.post.summary ?? "");
+      setTagsText(result.post.tags.join(", "));
+      setBody(blocksToMarkdown(result.post.body));
+      setInputFormat("markdown");
+      setAssets(result.post.assets);
+      setDrafts(result.drafts);
+      setSelectedPlatform(result.drafts.find((draft) => draft.platform !== "mock")?.platform ?? "wechat");
+      setMessage("本地草稿已载入");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "载入本地草稿失败");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function refreshSideData() {
+    const [postResult, jobResult, logResult] = await Promise.all([api.posts(), api.jobs(), api.logs()]);
+    setPosts(postResult.posts);
     setJobs(jobResult.jobs);
     setLogs(logResult.logs);
+  }
+
+  async function copyAssistPackage(raw: unknown) {
+    const packageText = JSON.stringify(raw, null, 2);
+    if (!navigator.clipboard || !packageText) {
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(packageText);
+    } catch {
+      // Clipboard permission is browser-controlled; assist publish still returns the package in logs.
+    }
   }
 
   return (
@@ -203,12 +291,22 @@ export default function App() {
               busy={busy}
               onSelect={setSelectedPlatform}
               onModeChange={(platform, mode) => setModes((current) => ({ ...current, [platform]: mode }))}
+              onDraftChange={handleDraftChange}
+              onSaveDraft={(draft) => void handleSaveDraft(draft)}
+              onConfirmDraft={(draft) => void handleConfirmDraft(draft)}
               onValidate={(draft) => void handleValidate(draft)}
               onPublish={(draft, mode) => void handlePublish(draft, mode)}
               onSimulateAll={() => void handleSimulateAll()}
             />
           </div>
-          <RightPanel assets={assets} jobs={jobs} logs={logs} />
+          <RightPanel
+            assets={assets}
+            jobs={jobs}
+            logs={logs}
+            posts={posts}
+            currentPostId={currentPostId}
+            onLoadPost={(postId) => void handleLoadPost(postId)}
+          />
         </div>
       </main>
     </div>

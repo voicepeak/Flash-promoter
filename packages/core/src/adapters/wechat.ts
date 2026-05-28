@@ -1,7 +1,8 @@
 import type { PlatformAdapter } from "./types.js";
 import type { PlatformAccount, PublishMode } from "../models.js";
 import { createId, now } from "../models.js";
-import { createDraftBase, enforceNoDirectPublish, originalMarkdown, simulatedResult, validateWithLimits } from "./common.js";
+import { generateStructuredPlatformAdaptation } from "../ai/local.js";
+import { createDraftBase, enforceNoDirectPublish, simulatedResult, validateWithLimits } from "./common.js";
 
 export const wechatAdapter: PlatformAdapter = {
   id: "wechat",
@@ -14,13 +15,14 @@ export const wechatAdapter: PlatformAdapter = {
     contentTypes: ["article"]
   },
   async transform(input) {
-    const body = originalMarkdown(input);
-    return createDraftBase("wechat", input, input.title, body, {
-      summary: input.summary,
-      coverPrompt: `${input.title} 的公众号封面，清晰、克制、图文阅读场景`,
-      coverText: input.title.slice(0, 18),
+    const adaptation = generateStructuredPlatformAdaptation(input).wechat;
+    return createDraftBase("wechat", input, adaptation.title, adaptation.bodyMarkdown, {
+      summary: adaptation.summary,
+      coverPrompt: adaptation.coverPrompt,
+      coverText: adaptation.coverText,
       draftOnlyByDefault: true,
-      riskNotes: ["MVP 阶段只模拟生成草稿，不默认真实发布。"]
+      riskNotes: adaptation.riskNotes,
+      structuredSource: "local-json-schema"
     });
   },
   async validate(draft) {

@@ -387,6 +387,46 @@ textarea,
   margin-bottom: 12px;
 }
 
+.draft-editor {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 12px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fbf6eb;
+}
+
+.draft-editor textarea {
+  height: 150px;
+}
+
+.draft-body-field {
+  display: grid;
+  gap: 6px;
+}
+
+.draft-body-field span,
+.meta-editor-grid span {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.meta-editor-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.meta-editor-grid label {
+  display: grid;
+  gap: 6px;
+}
+
+.meta-editor-grid textarea {
+  height: 100px;
+}
+
 .platform-preview {
   min-height: 320px;
   border: 1px solid var(--line);
@@ -586,6 +626,16 @@ textarea,
   align-items: center;
   justify-content: space-between;
   gap: 10px;
+}
+
+.compact-button {
+  width: 100%;
+  text-align: left;
+}
+
+.compact-button.active {
+  border-color: var(--accent);
+  background: #ecf8f2;
 }
 
 .compact-row span,

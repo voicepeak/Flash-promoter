@@ -69,7 +69,17 @@ export function EditorPanel(props: Props) {
   }
 
   return (
-    <section className="editor-panel">
+    <section
+      className="editor-panel"
+      onDragOver={(event) => {
+        event.preventDefault();
+        event.dataTransfer.dropEffect = "copy";
+      }}
+      onDrop={(event) => {
+        event.preventDefault();
+        void handleFiles(event.dataTransfer.files);
+      }}
+    >
       <div className="field-grid">
         <label>
           <span>标题</span>
