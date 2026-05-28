@@ -2,10 +2,12 @@ import type {
   Asset,
   CanonicalPost,
   PlatformDraft,
+  PlatformDraftUpdate,
   PlatformId,
   PublishJob,
   PublishLog,
   PublishMode,
+  PublishResult,
   ValidationResult
 } from "@flash-promoter/core";
 
@@ -64,6 +66,16 @@ export const api = {
       }
     ),
 
+  posts: () => request<{ posts: Array<CanonicalPost & { status: string }> }>("/posts"),
+
+  post: (postId: string) => request<{ post: CanonicalPost; drafts: PlatformDraft[] }>(`/posts/${postId}`),
+
+  updateDraft: (draftId: string, payload: PlatformDraftUpdate) =>
+    request<{ draft: PlatformDraft }>(`/drafts/${draftId}`, {
+      method: "PUT",
+      body: JSON.stringify(payload)
+    }),
+
   validateDraft: (draftId: string) =>
     request<{ ok: boolean; warnings: ValidationResult["warnings"]; errors: ValidationResult["errors"]; draft: PlatformDraft }>(
       `/drafts/${draftId}/validate`,
@@ -74,7 +86,7 @@ export const api = {
     ),
 
   publishDraft: (draftId: string, mode: PublishMode, confirmed = false) =>
-    request<{ jobId: string; status: string; result?: unknown }>(`/drafts/${draftId}/publish`, {
+    request<{ jobId: string; status: string; result?: PublishResult }>(`/drafts/${draftId}/publish`, {
       method: "POST",
       body: JSON.stringify({ mode, confirmed })
     }),

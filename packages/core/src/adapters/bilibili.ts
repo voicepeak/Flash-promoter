@@ -1,6 +1,7 @@
 import type { PlatformAdapter } from "./types.js";
 import type { PlatformAccount, PublishMode } from "../models.js";
-import { createDraftBase, enforceNoDirectPublish, firstSentences, originalMarkdown, selectTags, simulatedResult, validateWithLimits } from "./common.js";
+import { generateStructuredPlatformAdaptation } from "../ai/local.js";
+import { createDraftBase, enforceNoDirectPublish, originalMarkdown, simulatedResult, validateWithLimits } from "./common.js";
 
 export const bilibiliAdapter: PlatformAdapter = {
   id: "bilibili",
@@ -13,17 +14,18 @@ export const bilibiliAdapter: PlatformAdapter = {
     contentTypes: ["article", "video"]
   },
   async transform(input) {
-    const description = firstSentences(input, 5).join("\n");
-    return createDraftBase("bilibili", input, input.title.slice(0, 80), originalMarkdown(input), {
-      videoTitle: input.title.slice(0, 80),
-      articleTitle: input.title,
-      description,
-      tags: selectTags(input, ["知识", "创作"], 10),
-      partitionSuggestion: input.contentType === "video" ? "知识 / 科学科普" : "专栏 / 科技",
-      timeline: [],
-      pinnedComment: "欢迎在评论区补充你的经验。",
+    const adaptation = generateStructuredPlatformAdaptation(input).bilibili;
+    return createDraftBase("bilibili", input, adaptation.articleTitle, originalMarkdown(input), {
+      videoTitle: adaptation.videoTitle,
+      articleTitle: adaptation.articleTitle,
+      description: adaptation.description,
+      tags: adaptation.tags,
+      partitionSuggestion: adaptation.partitionSuggestion,
+      timeline: adaptation.timeline,
+      pinnedComment: adaptation.pinnedComment,
       apiReserved: true,
-      riskNotes: ["B站投稿存在审核流程，模拟提交不代表发布成功。"]
+      riskNotes: adaptation.riskNotes,
+      structuredSource: "local-json-schema"
     });
   },
   async validate(draft) {

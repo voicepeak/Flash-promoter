@@ -95,6 +95,53 @@ export type PlatformDraft = {
   updatedAt: number;
 };
 
+export type PlatformDraftUpdate = {
+  title?: string;
+  body?: string | Block[];
+  summary?: string;
+  tags?: string[];
+  topics?: string[];
+  platformMeta?: Record<string, unknown>;
+  userConfirmed?: boolean;
+};
+
+export type StructuredPlatformAdaptation = {
+  wechat: {
+    title: string;
+    summary: string;
+    bodyMarkdown: string;
+    coverPrompt: string;
+    coverText: string;
+    riskNotes: string[];
+  };
+  zhihu: {
+    title: string;
+    bodyMarkdown: string;
+    topics: string[];
+    answerStyle: string;
+    riskNotes: string[];
+  };
+  bilibili: {
+    videoTitle: string;
+    articleTitle: string;
+    description: string;
+    tags: string[];
+    partitionSuggestion: string;
+    timeline: string[];
+    pinnedComment: string;
+    riskNotes: string[];
+  };
+  xiaohongshu: {
+    title: string;
+    content: string;
+    hashtags: string[];
+    coverText: string;
+    cardTexts: string[];
+    emojiLevel: "none" | "low" | "medium";
+    riskNotes: string[];
+  };
+};
+
 export type PlatformAccount = {
   id: string;
   platform: PlatformId;

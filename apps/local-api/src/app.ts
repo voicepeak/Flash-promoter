@@ -6,10 +6,12 @@ import {
   createCanonicalPost,
   createId,
   defaultPublishMode,
+  generateStructuredPlatformAdaptation,
   generatePlatformDrafts,
   type CreatePostInput,
   type PlatformAccount,
   type PlatformDraft,
+  type PlatformDraftUpdate,
   type PlatformId,
   type PublishMode,
   type ValidationResult
@@ -50,6 +52,16 @@ const generateSchema = z.object({
 const publishSchema = z.object({
   mode: publishModeSchema.optional(),
   confirmed: z.boolean().default(false)
+});
+
+const updateDraftSchema = z.object({
+  title: z.string().min(1).optional(),
+  body: z.union([z.string(), z.array(z.unknown())]).optional(),
+  summary: z.string().optional(),
+  tags: z.array(z.string()).optional(),
+  topics: z.array(z.string()).optional(),
+  platformMeta: z.record(z.string(), z.unknown()).optional(),
+  userConfirmed: z.boolean().optional()
 });
 
 export function createApp(repository: FlashPromoterRepository) {
@@ -131,6 +143,7 @@ export function createApp(repository: FlashPromoterRepository) {
     }
 
     const parsed = generateSchema.parse(request.body ?? {});
+    const adaptation = generateStructuredPlatformAdaptation(post);
     const drafts = await generatePlatformDrafts(post, parsed.platforms as PlatformId[], { style: parsed.style });
     repository.replacePlatformDrafts(post.id, drafts);
     return {
@@ -139,7 +152,8 @@ export function createApp(repository: FlashPromoterRepository) {
         platform: draft.platform,
         status: "ready"
       })),
-      items: drafts
+      items: drafts,
+      adaptation
     };
   });
 
@@ -165,6 +179,19 @@ export function createApp(repository: FlashPromoterRepository) {
       ok: validation.ok,
       warnings: validation.warnings,
       errors: validation.errors,
+      draft: updated
+    };
+  });
+
+  app.put<{ Params: { draftId: string } }>("/api/drafts/:draftId", async (request, reply) => {
+    const current = repository.getPlatformDraft(request.params.draftId);
+    if (!current) {
+      return reply.code(404).send({ error: "draft_not_found" });
+    }
+
+    const parsed = updateDraftSchema.parse(request.body ?? {});
+    const updated = repository.updatePlatformDraft(current.id, parsed as PlatformDraftUpdate);
+    return {
       draft: updated
     };
   });
@@ -209,6 +236,24 @@ export function createApp(repository: FlashPromoterRepository) {
         jobId: job.id,
         status: "failed",
         validation
+      });
+    }
+
+    if (mode !== "simulate" && draft.aiGenerated && !draft.userConfirmed) {
+      const message = "平台版本为自动生成内容，必须先由用户确认后才能执行 draft / assist / publish。";
+      repository.updatePublishJob(job.id, "failed", undefined, message);
+      repository.addPublishLog({
+        jobId: job.id,
+        platform: draft.platform,
+        level: "error",
+        message,
+        raw: { draftId: draft.id, userConfirmed: draft.userConfirmed, mode }
+      });
+      return reply.code(409).send({
+        jobId: job.id,
+        status: "failed",
+        error: "draft_confirmation_required",
+        message
       });
     }
 
