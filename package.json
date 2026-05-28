@@ -1,0 +1,24 @@
+{
+  "name": "flash-promoter",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "npm run dev --workspace @flash-promoter/local-api",
+    "dev:api": "npm run dev --workspace @flash-promoter/local-api",
+    "dev:desktop": "npm run dev --workspace @flash-promoter/desktop",
+    "build": "npm run build --workspaces",
+    "typecheck": "npm run typecheck --workspaces"
+  },
+  "engines": {
+    "node": ">=24"
+  },
+  "devDependencies": {
+    "@types/node": "^24.10.1",
+    "typescript": "^5.9.3"
+  }
+}

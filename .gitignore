@@ -1,0 +1,11 @@
+node_modules/
+dist/
+apps/*/dist/
+packages/*/dist/
+data/
+.codex-run/
+.env
+.env.*
+*.sqlite
+*.sqlite-*
+*.log
