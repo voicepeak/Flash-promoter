@@ -20,6 +20,21 @@ type CreatePostPayload = {
   assets: Asset[];
 };
 
+type CreateVideoPayload = {
+  title: string;
+  body: string;
+  summary?: string;
+  tags: string[];
+  inputFormat: "markdown" | "html" | "text";
+  contentType: "video";
+  topic: string;
+  script?: string;
+  transcript?: string;
+  highlights: string[];
+  style: string;
+  assets: Asset[];
+};
+
 const headers = {
   "Content-Type": "application/json"
 };
@@ -57,12 +72,27 @@ export const api = {
       body: JSON.stringify(payload)
     }),
 
+  createVideoPost: (payload: CreateVideoPayload) =>
+    request<{ id: string; status: string; post: CanonicalPost }>("/posts", {
+      method: "POST",
+      body: JSON.stringify(payload)
+    }),
+
   generateDrafts: (postId: string, platforms: PlatformId[]) =>
     request<{ drafts: Array<{ id: string; platform: PlatformId; status: string }>; items: PlatformDraft[] }>(
       `/posts/${postId}/generate`,
       {
         method: "POST",
         body: JSON.stringify({ platforms, style: "balanced" })
+      }
+    ),
+
+  generateVideoDrafts: (postId: string, platforms: PlatformId[]) =>
+    request<{ drafts: Array<{ id: string; platform: PlatformId; status: string }>; items: PlatformDraft[] }>(
+      `/posts/${postId}/video-adaptations`,
+      {
+        method: "POST",
+        body: JSON.stringify({ platforms })
       }
     ),
 
