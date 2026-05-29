@@ -3,14 +3,16 @@ import Fastify from "fastify";
 import { z } from "zod";
 import {
   adapterRegistry,
+  buildPlatformGenerationPrompt,
   callLlm,
   createCanonicalPost,
   createId,
   createLlmConfig,
   defaultPublishMode,
-  generateStructuredPlatformAdaptation,
   generatePlatformDrafts,
+  generateStructuredPlatformAdaptation,
   generateVideoPlatformAdaptation,
+  parsePlatformDraft,
   type AiActionRequest,
   type CreatePostInput,
   type LlmConfig,
@@ -171,8 +173,52 @@ export function createApp(repository: FlashPromoterRepository) {
     }
 
     const parsed = generateSchema.parse(request.body ?? {});
-    const adaptation = generateStructuredPlatformAdaptation(post);
-    const drafts = await generatePlatformDrafts(post, parsed.platforms as PlatformId[], { style: parsed.style });
+    const platforms = parsed.platforms as PlatformId[];
+
+    const llmPost = repository.getPost(llmConfigKey);
+    let llmConfig: LlmConfig | null = null;
+    if (llmPost) {
+      try { llmConfig = JSON.parse((llmPost.body[0] as { text?: string }).text ?? "{}") as LlmConfig; } catch {}
+    }
+    const useLlm = !!(llmConfig?.enabled && llmConfig.apiKeyEncrypted && llmConfig.baseUrl);
+
+    let drafts: PlatformDraft[];
+
+    if (useLlm && llmConfig) {
+      // LLM-powered per-platform generation
+      const body = post.body.map((b) => ("text" in b ? b.text : "")).join("\n\n");
+      drafts = [];
+      for (const platform of platforms) {
+        if (platform === "mock") {
+          const mockDrafts = await generatePlatformDrafts(post, [platform], { style: "balanced" });
+          drafts.push(...mockDrafts);
+          continue;
+        }
+        const prompt = buildPlatformGenerationPrompt(platform, post.title, body, post.summary ?? "", post.tags);
+        try {
+          const res = await callLlm(llmConfig, {
+            contentId: post.id, action: "generate", contentType: "article",
+            currentValue: prompt, slotKey: platform, fieldLabel: platform,
+            inputContext: { title: post.title, body, summary: post.summary, tags: post.tags }
+          });
+          const draft = parsePlatformDraft(platform, post.id, post.title, body, post.summary ?? "", post.tags, res.candidates[0] ?? "");
+          drafts.push(draft);
+        } catch {
+          const fallback = await generatePlatformDrafts(post, [platform], { style: "balanced" });
+          drafts.push(...fallback);
+        }
+      }
+    } else {
+      const adaptation = generateStructuredPlatformAdaptation(post);
+      drafts = await generatePlatformDrafts(post, platforms, { style: "balanced" });
+      repository.replacePlatformDrafts(post.id, drafts);
+      return {
+        drafts: drafts.map((draft) => ({ id: draft.id, platform: draft.platform, status: "ready" })),
+        items: drafts,
+        adaptation
+      };
+    }
+
     repository.replacePlatformDrafts(post.id, drafts);
     return {
       drafts: drafts.map((draft) => ({
@@ -180,8 +226,7 @@ export function createApp(repository: FlashPromoterRepository) {
         platform: draft.platform,
         status: "ready"
       })),
-      items: drafts,
-      adaptation
+      items: drafts
     };
   });
 
@@ -192,6 +237,11 @@ export function createApp(repository: FlashPromoterRepository) {
     }
 
     const parsed = generateSchema.parse(request.body ?? {});
+    const platforms = parsed.platforms as PlatformId[];
+
+    const llmPost = repository.getPost(llmConfigKey);
+    const llmConfig: LlmConfig | null = llmPost ? JSON.parse((llmPost.body[0] as { text?: string }).text ?? "{}") as LlmConfig : null;
+
     const input: VideoAdaptationInput = {
       id: post.id,
       title: post.title,
@@ -204,7 +254,38 @@ export function createApp(repository: FlashPromoterRepository) {
       tags: post.tags
     };
 
-    const drafts = generateVideoPlatformAdaptation(input, parsed.platforms as PlatformId[]);
+    let drafts: PlatformDraft[];
+
+    const llmPost2 = repository.getPost(llmConfigKey);
+    let llmConfig2: LlmConfig | null = null;
+    if (llmPost2) {
+      try { llmConfig2 = JSON.parse((llmPost2.body[0] as { text?: string }).text ?? "{}") as LlmConfig; } catch {}
+    }
+    const useLlm2 = !!(llmConfig2?.enabled && llmConfig2.apiKeyEncrypted && llmConfig2.baseUrl);
+
+    if (useLlm2 && llmConfig2) {
+      const body = (input.script ?? input.transcript ?? input.summary ?? "");
+      drafts = [];
+      for (const platform of platforms) {
+        if (platform === "mock") continue;
+        const prompt = buildPlatformGenerationPrompt(platform, input.title, body, input.summary ?? "", input.tags);
+        try {
+          const res = await callLlm(llmConfig2, {
+            contentId: post.id, action: "generate", contentType: "video",
+            currentValue: prompt, slotKey: platform, fieldLabel: platform,
+            inputContext: { title: input.title, body, summary: input.summary, tags: input.tags, topic: input.topic }
+          });
+          const draft = parsePlatformDraft(platform, post.id, input.title, body, input.summary ?? "", input.tags, res.candidates[0] ?? "");
+          drafts.push(draft);
+        } catch {
+          const fallback = generateVideoPlatformAdaptation(input, [platform]);
+          drafts.push(...fallback);
+        }
+      }
+    } else {
+      drafts = generateVideoPlatformAdaptation(input, platforms);
+    }
+
     repository.replacePlatformDrafts(post.id, drafts);
     return {
       drafts: drafts.map((draft) => ({
