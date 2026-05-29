@@ -1,8 +1,7 @@
 import type { Asset } from "@flash-promoter/core";
-import { sanitizeHtml } from "../html.js";
 import { ArrowRight, FileImage, Trash2 } from "lucide-react";
-import { marked } from "marked";
 import { useRef } from "react";
+import { AiFieldButton } from "../AiFieldButton.js";
 
 type Props = {
   title: string;
@@ -34,13 +33,6 @@ function fileToDataUrl(file: File): Promise<string> {
 export function StepInput(props: Props) {
   const fileRef = useRef<HTMLInputElement>(null);
 
-  const previewHtml =
-    props.inputFormat === "markdown"
-      ? sanitizeHtml(marked.parse(props.body, { async: false }) as string)
-      : props.inputFormat === "html"
-        ? sanitizeHtml(props.body)
-        : sanitizeHtml(props.body.split(/\n{2,}/).map((p) => `<p>${escapeHtml(p)}</p>`).join(""));
-
   async function handleFiles(files: FileList | null) {
     if (!files?.length) return;
     const next: Asset[] = [];
@@ -71,16 +63,16 @@ export function StepInput(props: Props) {
 
       <div className="field-grid">
         <label>
-          <span>标题 *</span>
+          <span className="field-label-row">标题 * <AiFieldButton slotKey="title" fieldLabel="标题" currentValue={props.title} contentType="article" onApply={(v, m) => props.onTitleChange(m === "append" ? `${props.title} ${v}` : v)} inputContext={{ body: props.body, summary: props.summary, tags: props.tagsText }} /></span>
           <input value={props.title} onChange={(e) => props.onTitleChange(e.target.value)} placeholder="输入文章标题" />
           {titleHint ? <small className="field-hint">{titleHint}</small> : null}
         </label>
         <label>
-          <span>摘要</span>
+          <span className="field-label-row">摘要 <AiFieldButton slotKey="summary" fieldLabel="摘要" currentValue={props.summary} contentType="article" onApply={(v, m) => props.onSummaryChange(m === "append" ? `${props.summary} ${v}` : v)} inputContext={{ title: props.title, body: props.body }} /></span>
           <input value={props.summary} onChange={(e) => props.onSummaryChange(e.target.value)} placeholder="可选，简要描述内容" />
         </label>
         <label className="wide-field">
-          <span>标签（逗号分隔）</span>
+          <span className="field-label-row">标签（逗号分隔） <AiFieldButton slotKey="tags" fieldLabel="标签" currentValue={props.tagsText} contentType="article" onApply={(v, m) => props.onTagsChange(m === "append" ? `${props.tagsText}, ${v}` : v)} inputContext={{ title: props.title, body: props.body }} /></span>
           <input value={props.tagsText} onChange={(e) => props.onTagsChange(e.target.value)} placeholder="例如：科技, 互联网, AI" />
         </label>
       </div>
@@ -97,15 +89,19 @@ export function StepInput(props: Props) {
           <FileImage size={18} />
           <input ref={fileRef} type="file" accept="image/*" multiple onChange={(e) => void handleFiles(e.target.files)} />
         </label>
+        <span className="field-label-row" style={{ marginLeft: 6 }}>
+          <AiFieldButton slotKey="body" fieldLabel="正文" currentValue={props.body} contentType="article"
+            onApply={(v, m) => props.onBodyChange(m === "append" ? `${props.body}\n\n${v}` : v)}
+            inputContext={{ title: props.title, summary: props.summary, tags: props.tagsText }} />
+        </span>
       </div>
 
       <div className="editor-split">
         {props.inputFormat === "html" ? (
-          <div className="rich-editor" contentEditable suppressContentEditableWarning onInput={(e) => props.onBodyChange(e.currentTarget.innerHTML)} dangerouslySetInnerHTML={{ __html: props.body }} />
+          <div className="rich-editor" style={{ gridColumn: "1 / -1" }} contentEditable suppressContentEditableWarning onInput={(e) => props.onBodyChange(e.currentTarget.innerHTML)} dangerouslySetInnerHTML={{ __html: props.body }} />
         ) : (
-          <textarea value={props.body} onChange={(e) => props.onBodyChange(e.target.value)} placeholder="在此输入正文内容…" />
+          <textarea style={{ gridColumn: "1 / -1", height: 280 }} value={props.body} onChange={(e) => props.onBodyChange(e.target.value)} placeholder="在此输入正文内容…" />
         )}
-        <article className="markdown-preview" dangerouslySetInnerHTML={{ __html: previewHtml }} />
       </div>
 
       {bodyHint ? <p className="field-hint" style={{ marginTop: 8 }}>{bodyHint}</p> : null}
@@ -129,8 +125,4 @@ export function StepInput(props: Props) {
       </div>
     </div>
   );
-}
-
-function escapeHtml(v: string) {
-  return v.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
 }

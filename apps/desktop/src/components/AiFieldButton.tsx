@@ -1,16 +1,19 @@
 import { useState, useCallback, useEffect } from "react";
-import type { AiActionResult, AiActionRequest, AiActionType, PlatformDraft, PlatformId } from "@flash-promoter/core";
+import type { AiActionResult, AiActionRequest, AiActionType, PlatformDraft } from "@flash-promoter/core";
 import { platformLabels } from "@flash-promoter/core";
 import { api } from "../api/client.js";
 import { Sparkles, Loader2, Check, X, Wand2 } from "lucide-react";
 
 type Props = {
-  draft: PlatformDraft;
   slotKey: string;
   fieldLabel: string;
   currentValue: string;
   contentType: "article" | "video";
   onApply: (value: string, mode: "replace" | "append") => void;
+  // optional: when editing platform drafts
+  draft?: PlatformDraft;
+  // optional: when at input stage (no draft yet), provide raw context
+  inputContext?: Record<string, unknown>;
 };
 
 const actionLabels: Record<string, string> = {
@@ -26,22 +29,33 @@ export function AiFieldButton(props: Props) {
   const [result, setResult] = useState<AiActionResult | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const actions: AiActionType[] = ["generate", "optimize", "generateAlternatives", ...(props.slotKey === "title" ? ["shorten" as AiActionType] : []), ...(props.slotKey === "tags" ? ["extract" as AiActionType] : [])];
+  const actions: AiActionType[] = [
+    "generate", "optimize", "generateAlternatives",
+    ...(props.slotKey === "title" ? ["shorten" as AiActionType] : []),
+    ...(props.slotKey === "tags" || props.slotKey === "highlightsText" || props.slotKey === "hashtags" ? ["extract" as AiActionType] : []),
+    ...(props.slotKey === "body" || props.slotKey === "script" ? ["rewrite" as AiActionType] : [])
+  ];
 
   const doAction = useCallback(async (action: AiActionType) => {
     setLoading(true); setError(null); setResult(null);
     try {
+      const context = props.draft
+        ? { title: props.draft.title, body: typeof props.draft.body === "string" ? props.draft.body : "", summary: props.draft.summary, tags: props.draft.tags, platform: platformLabels[props.draft.platform] }
+        : (props.inputContext ?? {});
       const req: AiActionRequest = {
-        contentId: props.draft.postId, slotKey: props.slotKey, action, platform: props.draft.platform,
-        contentType: props.contentType, fieldLabel: props.fieldLabel, currentValue: props.currentValue,
-        inputContext: { title: props.draft.title, body: typeof props.draft.body === "string" ? props.draft.body : "", summary: props.draft.summary, tags: props.draft.tags, platform: platformLabels[props.draft.platform] }
+        contentId: props.draft?.postId ?? "input-stage",
+        slotKey: props.slotKey, action,
+        platform: props.draft?.platform,
+        contentType: props.contentType, fieldLabel: props.fieldLabel,
+        currentValue: props.currentValue,
+        inputContext: context
       };
       const res = await api.aiAction(req);
       setResult(res);
     } catch (e) {
       setError(e instanceof Error ? e.message : "AI 调用失败");
     } finally { setLoading(false); }
-  }, [props]);
+  }, [props.currentValue, props.draft, props.slotKey, props.fieldLabel, props.contentType, props.inputContext]);
 
   useEffect(() => { if (!open) { setResult(null); setError(null); } }, [open]);
 
@@ -71,7 +85,7 @@ export function AiFieldButton(props: Props) {
             <div className="ai-results">
               {result.candidates.map((c, i) => (
                 <div key={i} className="ai-candidate">
-                  <p>{c.slice(0, 300)}</p>
+                  <p>{c.slice(0, 500)}</p>
                   <div className="ai-candidate-actions">
                     <button type="button" className="primary-button" onClick={() => { props.onApply(c, "replace"); setOpen(false); }}><Check size={14} /> 替换</button>
                     <button type="button" onClick={() => { props.onApply(c, "append"); setOpen(false); }}>追加</button>
