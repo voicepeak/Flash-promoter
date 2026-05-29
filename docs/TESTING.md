@@ -53,15 +53,10 @@ PASS publish logs written
 启动应用：
 
 ```bash
-npm run dev:api
-npm run dev:desktop
+npm run dev
 ```
 
-打开浏览器访问：
-
-```text
-http://127.0.0.1:5173
-```
+打开浏览器访问 `http://127.0.0.1:5173`。
 
 操作步骤：
 
@@ -165,15 +160,10 @@ PASS publish logs written
 Start the app:
 
 ```bash
-npm run dev:api
-npm run dev:desktop
+npm run dev
 ```
 
-Open in browser:
-
-```text
-http://127.0.0.1:5173
-```
+Open `http://127.0.0.1:5173` in browser.
 
 Steps:
 
