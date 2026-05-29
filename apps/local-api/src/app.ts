@@ -176,11 +176,15 @@ export function createApp(repository: FlashPromoterRepository) {
     const platforms = parsed.platforms as PlatformId[];
 
     const llmPost = repository.getPost(llmConfigKey);
-    const llmConfig: LlmConfig | null = llmPost ? JSON.parse((llmPost.body[0] as { text?: string }).text ?? "{}") as LlmConfig : null;
+    let llmConfig: LlmConfig | null = null;
+    if (llmPost) {
+      try { llmConfig = JSON.parse((llmPost.body[0] as { text?: string }).text ?? "{}") as LlmConfig; } catch {}
+    }
+    const useLlm = !!(llmConfig?.enabled && llmConfig.apiKeyEncrypted && llmConfig.baseUrl);
 
     let drafts: PlatformDraft[];
 
-    if (llmConfig?.enabled && llmConfig.apiKeyEncrypted) {
+    if (useLlm && llmConfig) {
       // LLM-powered per-platform generation
       const body = post.body.map((b) => ("text" in b ? b.text : "")).join("\n\n");
       drafts = [];
@@ -252,14 +256,21 @@ export function createApp(repository: FlashPromoterRepository) {
 
     let drafts: PlatformDraft[];
 
-    if (llmConfig?.enabled && llmConfig.apiKeyEncrypted) {
+    const llmPost2 = repository.getPost(llmConfigKey);
+    let llmConfig2: LlmConfig | null = null;
+    if (llmPost2) {
+      try { llmConfig2 = JSON.parse((llmPost2.body[0] as { text?: string }).text ?? "{}") as LlmConfig; } catch {}
+    }
+    const useLlm2 = !!(llmConfig2?.enabled && llmConfig2.apiKeyEncrypted && llmConfig2.baseUrl);
+
+    if (useLlm2 && llmConfig2) {
       const body = (input.script ?? input.transcript ?? input.summary ?? "");
       drafts = [];
       for (const platform of platforms) {
         if (platform === "mock") continue;
         const prompt = buildPlatformGenerationPrompt(platform, input.title, body, input.summary ?? "", input.tags);
         try {
-          const res = await callLlm(llmConfig, {
+          const res = await callLlm(llmConfig2, {
             contentId: post.id, action: "generate", contentType: "video",
             currentValue: prompt, slotKey: platform, fieldLabel: platform,
             inputContext: { title: input.title, body, summary: input.summary, tags: input.tags, topic: input.topic }
