@@ -226,3 +226,84 @@ export function createId(prefix: string): string {
   const random = Math.random().toString(36).slice(2, 10);
   return `${prefix}_${Date.now().toString(36)}_${random}`;
 }
+
+/* ===== Video Models ===== */
+
+export type VideoStyle =
+  | "knowledge"
+  | "product"
+  | "review"
+  | "event"
+  | "talking-head"
+  | "vlog"
+  | "tutorial"
+  | "project-demo";
+
+export const videoStyleLabels: Record<VideoStyle, string> = {
+  knowledge: "知识科普",
+  product: "产品介绍",
+  review: "测评",
+  event: "活动记录",
+  "talking-head": "口播",
+  vlog: "Vlog",
+  tutorial: "教程",
+  "project-demo": "项目展示"
+};
+
+export type VideoAsset = {
+  id: string;
+  type: "video";
+  localPath: string;
+  filename: string;
+  mimeType?: string;
+  size?: number;
+  duration?: number;
+  width?: number;
+  height?: number;
+  fps?: number;
+  bitrate?: number;
+  codec?: string;
+  createdAt: number;
+  updatedAt: number;
+};
+
+export type VideoPlatformMeta =
+  | {
+      platform: "bilibili";
+      partitionSuggestion?: string;
+      timeline?: string[];
+      pinnedComment?: string;
+    }
+  | {
+      platform: "xiaohongshu";
+      hashtags?: string[];
+      firstComment?: string;
+    }
+  | {
+      platform: "zhihu";
+      answerIntro?: string;
+      topics?: string[];
+    }
+  | {
+      platform: "wechat";
+      articleBodyMarkdown?: string;
+    };
+
+export type VideoPlatformDraft = {
+  id: string;
+  contentId: string;
+  contentType: "video";
+  platform: PlatformId;
+  title: string;
+  description?: string;
+  body?: string;
+  tags?: string[];
+  topics?: string[];
+  coverText?: string;
+  platformMeta: Record<string, unknown>;
+  aiGenerated: boolean;
+  userConfirmed: boolean;
+  validation?: ValidationResult;
+  createdAt: number;
+  updatedAt: number;
+};

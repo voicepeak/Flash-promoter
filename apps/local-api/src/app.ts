@@ -8,13 +8,15 @@ import {
   defaultPublishMode,
   generateStructuredPlatformAdaptation,
   generatePlatformDrafts,
+  generateVideoPlatformAdaptation,
   type CreatePostInput,
   type PlatformAccount,
   type PlatformDraft,
   type PlatformDraftUpdate,
   type PlatformId,
   type PublishMode,
-  type ValidationResult
+  type ValidationResult,
+  type VideoAdaptationInput
 } from "@flash-promoter/core";
 import { FlashPromoterRepository } from "@flash-promoter/storage";
 
@@ -29,6 +31,13 @@ const createPostSchema = z.object({
   tags: z.array(z.string()).optional(),
   inputFormat: z.enum(["markdown", "html", "text"]).default("markdown"),
   contentType: z.enum(["article", "video", "image-note", "qa-answer"]).default("article"),
+  topic: z.string().optional(),
+  script: z.string().optional(),
+  transcript: z.string().optional(),
+  highlights: z.array(z.string()).optional(),
+  style: z.string().optional(),
+  videoAssetId: z.string().optional(),
+  coverAssetId: z.string().optional(),
   assets: z
     .array(
       z.object({
@@ -38,7 +47,10 @@ const createPostSchema = z.object({
         localPath: z.string().optional(),
         filename: z.string().optional(),
         mimeType: z.string().optional(),
-        size: z.number().optional()
+        size: z.number().optional(),
+        duration: z.number().optional(),
+        width: z.number().optional(),
+        height: z.number().optional()
       })
     )
     .optional()
@@ -107,12 +119,24 @@ export function createApp(repository: FlashPromoterRepository) {
         filename: asset.filename,
         mimeType: asset.mimeType,
         size: asset.size,
+        duration: asset.duration,
+        width: asset.width,
+        height: asset.height,
         createdAt: timestamp,
         updatedAt: timestamp
       }))
     };
 
     const post = createCanonicalPost(input);
+    if (parsed.contentType === "video") {
+      (post as Record<string, unknown>).topic = parsed.topic ?? "";
+      (post as Record<string, unknown>).script = parsed.script ?? "";
+      (post as Record<string, unknown>).transcript = parsed.transcript ?? "";
+      (post as Record<string, unknown>).highlights = parsed.highlights ?? [];
+      (post as Record<string, unknown>).style = parsed.style ?? "";
+      (post as Record<string, unknown>).videoAssetId = parsed.videoAssetId ?? "";
+      (post as Record<string, unknown>).coverAssetId = parsed.coverAssetId ?? "";
+    }
     repository.createPost(post);
     return reply.code(201).send({
       id: post.id,
@@ -154,6 +178,37 @@ export function createApp(repository: FlashPromoterRepository) {
       })),
       items: drafts,
       adaptation
+    };
+  });
+
+  app.post<{ Params: { postId: string } }>("/api/posts/:postId/video-adaptations", async (request, reply) => {
+    const post = repository.getPost(request.params.postId);
+    if (!post) {
+      return reply.code(404).send({ error: "post_not_found" });
+    }
+
+    const parsed = generateSchema.parse(request.body ?? {});
+    const input: VideoAdaptationInput = {
+      id: post.id,
+      title: post.title,
+      topic: (post as Record<string, unknown>).topic as string ?? post.summary ?? "",
+      summary: post.summary,
+      style: (post as Record<string, unknown>).style as string | undefined,
+      script: (post as Record<string, unknown>).script as string | undefined,
+      transcript: (post as Record<string, unknown>).transcript as string | undefined,
+      highlights: (post as Record<string, unknown>).highlights as string[] | undefined,
+      tags: post.tags
+    };
+
+    const drafts = generateVideoPlatformAdaptation(input, parsed.platforms as PlatformId[]);
+    repository.replacePlatformDrafts(post.id, drafts);
+    return {
+      drafts: drafts.map((draft) => ({
+        id: draft.id,
+        platform: draft.platform,
+        status: "ready"
+      })),
+      items: drafts
     };
   });
 

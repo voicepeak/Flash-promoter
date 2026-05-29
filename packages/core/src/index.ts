@@ -7,3 +7,4 @@ export * from "./adapters/types.js";
 export * from "./adapters/registry.js";
 export * from "./adapters/index.js";
 export * from "./pipeline/generate.js";
+export * from "./pipeline/video.js";
