@@ -1538,9 +1538,9 @@ textarea,
   padding: 4px 8px;
 }
 
-/* ===== Video Stepper (7 steps) ===== */
+/* ===== Video Stepper (6 steps) ===== */
 .stepper-video {
-  grid-template-columns: repeat(7, minmax(0, 1fr));
+  grid-template-columns: repeat(6, minmax(0, 1fr));
 }
 
 /* ===== Filter Buttons ===== */

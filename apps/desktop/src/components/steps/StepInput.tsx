@@ -1,128 +1,124 @@
-import type { Asset } from "@flash-promoter/core";
-import { ArrowRight, FileImage, Trash2 } from "lucide-react";
-import { useRef } from "react";
+import { useState } from "react";
+import { api } from "../../api/client.js";
+import { Sparkles, Loader2, ArrowRight, CheckCircle2 } from "lucide-react";
 import { AiFieldButton } from "../AiFieldButton.js";
 
-type Props = {
-  title: string;
-  body: string;
-  summary: string;
-  tagsText: string;
-  inputFormat: "markdown" | "html" | "text";
-  assets: Asset[];
-  busy: boolean;
-  onTitleChange: (v: string) => void;
-  onBodyChange: (v: string) => void;
-  onSummaryChange: (v: string) => void;
-  onTagsChange: (v: string) => void;
-  onInputFormatChange: (v: "markdown" | "html" | "text") => void;
-  onAssetsChange: (assets: Asset[]) => void;
-  onNext: () => void;
-  canNext: boolean;
+type Analyzed = {
+  title: string; summary: string; tags: string[]; keyPoints: string[];
+  highlights: string[]; suggestedPlatforms: string[]; tone: string;
 };
 
-function fileToDataUrl(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result));
-    reader.onerror = () => reject(reader.error);
-    reader.readAsDataURL(file);
-  });
-}
+type Props = {
+  onAnalyzed: (body: string, analyzed: Analyzed, tagsText: string) => void;
+};
 
 export function StepInput(props: Props) {
-  const fileRef = useRef<HTMLInputElement>(null);
+  const [body, setBody] = useState("");
+  const [analyzing, setAnalyzing] = useState(false);
+  const [analyzed, setAnalyzed] = useState<Analyzed | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
-  async function handleFiles(files: FileList | null) {
-    if (!files?.length) return;
-    const next: Asset[] = [];
-    for (const file of Array.from(files)) {
-      if (!file.type.startsWith("image/")) continue;
-      const dataUrl = await fileToDataUrl(file);
-      next.push({
-        id: `asset_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`,
-        type: "image", dataUrl, filename: file.name, mimeType: file.type,
-        size: file.size, createdAt: Date.now(), updatedAt: Date.now()
+  async function analyze() {
+    if (!body.trim()) return;
+    setAnalyzing(true); setError(null);
+    try {
+      const res = await api.aiAction({
+        contentId: "input-stage", action: "analyzeContent", contentType: "article",
+        currentValue: body, slotKey: "body", fieldLabel: "内容分析",
+        inputContext: {}
       });
-    }
-    if (!next.length) return;
-    props.onAssetsChange([...props.assets, ...next]);
-    if (props.inputFormat === "markdown") {
-      const md = next.map((a) => `![${a.filename ?? "image"}](asset:${a.id})`).join("\n\n");
-      props.onBodyChange(`${props.body.trim()}\n\n${md}`.trim());
-    }
+      const json = tryParse(res.candidates[0] ?? "");
+      if (json) {
+        setAnalyzed({ title: String(json.title ?? ""), summary: String(json.summary ?? ""), tags: asStrings(json.tags), keyPoints: asStrings(json.keyPoints), highlights: asStrings(json.highlights), suggestedPlatforms: asStrings(json.suggestedPlatforms), tone: String(json.tone ?? "") });
+      } else {
+        setError("AI 返回格式异常，请重试");
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "分析失败");
+      setAnalyzed(null);
+    } finally { setAnalyzing(false); }
   }
 
-  const titleHint = !props.title.trim() ? "请填写标题" : "";
-  const bodyHint = props.body.trim().length < 10 ? "正文内容不能少于 10 个字" : "";
+  function confirm() {
+    if (!analyzed) return;
+    props.onAnalyzed(body, analyzed, analyzed.tags.join(", "));
+  }
+
+  const canAnalyze = body.trim().length > 10;
 
   return (
-    <div className="step-panel" onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = "copy"; }} onDrop={(e) => { e.preventDefault(); void handleFiles(e.dataTransfer.files); }}>
-      <h2>输入内容</h2>
-      <p className="step-desc">请输入或粘贴要发布的内容。可以使用标题、摘要和标签来组织信息。</p>
+    <div className="step-panel">
+      <h2>输入原稿</h2>
+      <p className="step-desc">粘贴或输入原始正文，点击「AI 分析」让系统自动提取标题、摘要、标签等信息。</p>
 
-      <div className="field-grid">
-        <label>
-          <span className="field-label-row">标题 * <AiFieldButton slotKey="title" fieldLabel="标题" currentValue={props.title} contentType="article" onApply={(v, m) => props.onTitleChange(m === "append" ? `${props.title} ${v}` : v)} inputContext={{ body: props.body, summary: props.summary, tags: props.tagsText }} /></span>
-          <input value={props.title} onChange={(e) => props.onTitleChange(e.target.value)} placeholder="输入文章标题" />
-          {titleHint ? <small className="field-hint">{titleHint}</small> : null}
-        </label>
-        <label>
-          <span className="field-label-row">摘要 <AiFieldButton slotKey="summary" fieldLabel="摘要" currentValue={props.summary} contentType="article" onApply={(v, m) => props.onSummaryChange(m === "append" ? `${props.summary} ${v}` : v)} inputContext={{ title: props.title, body: props.body }} /></span>
-          <input value={props.summary} onChange={(e) => props.onSummaryChange(e.target.value)} placeholder="可选，简要描述内容" />
-        </label>
-        <label className="wide-field">
-          <span className="field-label-row">标签（逗号分隔） <AiFieldButton slotKey="tags" fieldLabel="标签" currentValue={props.tagsText} contentType="article" onApply={(v, m) => props.onTagsChange(m === "append" ? `${props.tagsText}, ${v}` : v)} inputContext={{ title: props.title, body: props.body }} /></span>
-          <input value={props.tagsText} onChange={(e) => props.onTagsChange(e.target.value)} placeholder="例如：科技, 互联网, AI" />
-        </label>
-      </div>
+      <textarea
+        style={{ width: "100%", height: 260, fontFamily: "inherit", fontSize: 14, lineHeight: 1.7, padding: 14 }}
+        value={body}
+        onChange={(e) => setBody(e.target.value)}
+        placeholder="在此粘贴或输入你的原始内容…"
+      />
 
-      <div className="editor-toolbar">
-        <div className="segmented">
-          {(["text", "markdown", "html"] as const).map((f) => (
-            <button key={f} type="button" className={props.inputFormat === f ? "active" : ""} onClick={() => props.onInputFormatChange(f)}>
-              {f === "markdown" ? "Markdown" : f === "html" ? "富文本" : "普通文本"}
-            </button>
-          ))}
-        </div>
-        <label className="icon-button file-button" title="上传图片">
-          <FileImage size={18} />
-          <input ref={fileRef} type="file" accept="image/*" multiple onChange={(e) => void handleFiles(e.target.files)} />
-        </label>
-        <span className="field-label-row" style={{ marginLeft: 6 }}>
-          <AiFieldButton slotKey="body" fieldLabel="正文" currentValue={props.body} contentType="article"
-            onApply={(v, m) => props.onBodyChange(m === "append" ? `${props.body}\n\n${v}` : v)}
-            inputContext={{ title: props.title, summary: props.summary, tags: props.tagsText }} />
-        </span>
-      </div>
-
-      <div className="editor-split">
-        {props.inputFormat === "html" ? (
-          <div className="rich-editor" style={{ gridColumn: "1 / -1" }} contentEditable suppressContentEditableWarning onInput={(e) => props.onBodyChange(e.currentTarget.innerHTML)} dangerouslySetInnerHTML={{ __html: props.body }} />
-        ) : (
-          <textarea style={{ gridColumn: "1 / -1", height: 280 }} value={props.body} onChange={(e) => props.onBodyChange(e.target.value)} placeholder="在此输入正文内容…" />
+      <div style={{ display: "flex", gap: 10, marginTop: 14, alignItems: "center" }}>
+        <button className="primary-button" type="button" disabled={!canAnalyze || analyzing} onClick={analyze}>
+          {analyzing ? <Loader2 size={17} className="spinner" /> : <Sparkles size={17} />}
+          {analyzing ? "正在分析…" : "AI 分析"}
+        </button>
+        {error && <span style={{ color: "var(--danger)", fontSize: 13 }}>{error}</span>}
+        {analyzed && !analyzing && (
+          <span style={{ color: "#0e7c66", fontSize: 13, display: "flex", alignItems: "center", gap: 4 }}>
+            <CheckCircle2 size={14} /> 分析完成
+          </span>
         )}
       </div>
 
-      {bodyHint ? <p className="field-hint" style={{ marginTop: 8 }}>{bodyHint}</p> : null}
+      {analyzed && (
+        <div className="analyze-result" style={{ marginTop: 18, padding: 18, border: "2px solid var(--accent)", borderRadius: 12, background: "#f6fcf9" }}>
+          <h3 style={{ margin: "0 0 14px" }}>📋 AI 分析结果 — 请检查并编辑</h3>
 
-      {props.assets.length > 0 && (
-        <div className="asset-strip">
-          {props.assets.map((a) => (
-            <div className="asset-chip" key={a.id}>
-              {a.dataUrl ? <img src={a.dataUrl} alt={a.filename ?? ""} /> : <span className="asset-placeholder" />}
-              <span>{a.filename ?? a.id}</span>
-              <button type="button" onClick={() => props.onAssetsChange(props.assets.filter((x) => x.id !== a.id))}><Trash2 size={14} /></button>
+          <div className="analyze-grid">
+            <label>
+              <span className="field-label-row">标题 <AiFieldButton slotKey="title" fieldLabel="标题" currentValue={analyzed.title} contentType="article" onApply={(v: string, m: string) => setAnalyzed({ ...analyzed, title: m === "append" ? `${analyzed.title} ${v}` : v })} inputContext={{ body }} /></span>
+              <input value={analyzed.title} onChange={(e) => setAnalyzed({ ...analyzed, title: e.target.value })} />
+            </label>
+            <label>
+              <span className="field-label-row">摘要 <AiFieldButton slotKey="summary" fieldLabel="摘要" currentValue={analyzed.summary} contentType="article" onApply={(v: string, m: string) => setAnalyzed({ ...analyzed, summary: m === "append" ? `${analyzed.summary} ${v}` : v })} inputContext={{ body, title: analyzed.title }} /></span>
+              <input value={analyzed.summary} onChange={(e) => setAnalyzed({ ...analyzed, summary: e.target.value })} />
+            </label>
+            <label className="wide-field">
+              <span className="field-label-row">标签 <AiFieldButton slotKey="tags" fieldLabel="标签" currentValue={analyzed.tags.join(", ")} contentType="article" onApply={(v: string, m: string) => setAnalyzed({ ...analyzed, tags: [...analyzed.tags, ...(m === "replace" ? v.split(/[,，\n]/).map((s: string) => s.trim()).filter(Boolean) : [v])] })} inputContext={{ body, title: analyzed.title }} /></span>
+              <input value={analyzed.tags.join(", ")} onChange={(e) => setAnalyzed({ ...analyzed, tags: e.target.value.split(/[,，\n]/).map((s) => s.trim()).filter(Boolean) })} />
+            </label>
+          </div>
+
+          {analyzed.keyPoints.length > 0 && (
+            <div style={{ marginTop: 12, padding: "10px 0 0", borderTop: "1px solid var(--line)" }}>
+              <strong style={{ fontSize: 13, color: "var(--muted)" }}>核心观点</strong>
+              <ul style={{ margin: "4px 0 0", paddingLeft: 18 }}>{analyzed.keyPoints.map((p, i) => <li key={i} style={{ fontSize: 14 }}>{p}</li>)}</ul>
             </div>
-          ))}
+          )}
+          {analyzed.highlights.length > 0 && (
+            <div style={{ marginTop: 8, padding: "10px 0 0", borderTop: "1px solid var(--line)" }}>
+              <strong style={{ fontSize: 13, color: "var(--muted)" }}>亮点句</strong>
+              <ul style={{ margin: "4px 0 0", paddingLeft: 18 }}>{analyzed.highlights.map((h, i) => <li key={i} style={{ fontSize: 14 }}>{h}</li>)}</ul>
+            </div>
+          )}
+          {analyzed.tone && (
+            <div style={{ marginTop: 8, fontSize: 13, color: "var(--muted)" }}>风格：{analyzed.tone}</div>
+          )}
+
+          <div className="step-actions" style={{ marginTop: 16, border: 0, padding: 0 }}>
+            <button className="primary-button" type="button" onClick={confirm}>
+              确认并继续 <ArrowRight size={17} />
+            </button>
+          </div>
         </div>
       )}
-
-      <div className="step-actions">
-        <button className="primary-button" type="button" disabled={props.busy || !props.canNext} onClick={props.onNext}>
-          下一步：选择平台 <ArrowRight size={17} />
-        </button>
-      </div>
     </div>
   );
 }
+
+function tryParse(raw: string): Record<string, unknown> | null {
+  try { const cleaned = raw.replace(/```json\s*/g, "").replace(/```\s*/g, "").trim(); return JSON.parse(cleaned) as Record<string, unknown>; }
+  catch { return null; }
+}
+function asStrings(v: unknown): string[] { return Array.isArray(v) ? v.map(String) : []; }

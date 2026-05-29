@@ -1,7 +1,8 @@
 export type AiActionType =
   | "generate" | "optimize" | "rewrite" | "shorten" | "expand"
   | "extract" | "generateAlternatives" | "generateFromText"
-  | "generateFromImage" | "generateFromVideo" | "riskCheck";
+  | "generateFromImage" | "generateFromVideo" | "riskCheck"
+  | "analyzeContent";
 
 export type LlmModelCapabilities = {
   text: boolean;
@@ -79,7 +80,21 @@ export function buildAiPrompt(req: AiActionRequest): string {
     generateFromText: `请根据以下正文生成${field}${platform}。\n正文：\n${context}`,
     generateFromImage: `请根据图片内容生成${field}。\n素材：\n${context}`,
     generateFromVideo: `请根据视频信息生成${field}。\n素材：\n${context}`,
-    riskCheck: `请检查以下内容是否存在风险${platform}。\n内容：「${req.currentValue}」\n素材：\n${context}`
+    riskCheck: `请检查以下内容是否存在风险${platform}。\n内容：「${req.currentValue}」\n素材：\n${context}`,
+    analyzeContent: `请分析以下原始内容，提取各项元数据。必须严格按以下 JSON 格式输出，不要输出任何其他文字：
+
+{
+  "title": "提取或生成的标题",
+  "summary": "简洁的内容摘要",
+  "tags": ["标签1", "标签2", "标签3"],
+  "keyPoints": ["核心观点1", "核心观点2"],
+  "highlights": ["亮点句子1"],
+  "suggestedPlatforms": ["wechat", "zhihu"],
+  "tone": "内容风格描述"
+}
+
+原始内容：
+${req.currentValue}`
   };
 
   return actionPrompts[req.action] ?? actionPrompts.generate;
