@@ -1564,3 +1564,51 @@ textarea,
   border-color: var(--charcoal);
   color: #fffaf0;
 }
+
+/* ===== AI Field Button & Popover ===== */
+.ai-field-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid #bcd1f0;
+  border-radius: 4px;
+  background: #f0f5ff;
+  color: #315ca8;
+  cursor: pointer;
+  vertical-align: middle;
+  margin-left: 6px;
+}
+.ai-field-trigger:hover { background: #dbe8ff; }
+.field-label-row { display: inline-flex; align-items: center; white-space: nowrap; }
+
+.ai-popover {
+  position: absolute; top: 100%; left: 0; z-index: 100;
+  width: 320px; margin-top: 6px;
+  border: 1px solid #bcd1f0; border-radius: 10px;
+  background: #fff; box-shadow: 0 8px 30px rgba(0,0,0,0.14);
+  padding: 12px;
+}
+.ai-popover-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; font-size: 13px; font-weight: 600; }
+.ai-popover-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.ai-loading { display: flex; align-items: center; gap: 8px; padding: 12px 0; color: var(--muted); font-size: 13px; }
+.ai-error { padding: 8px; border-radius: 6px; background: #fff0ee; color: var(--danger); font-size: 13px; }
+.ai-results { display: grid; gap: 8px; }
+.ai-candidate { padding: 10px; border: 1px solid var(--line); border-radius: 8px; background: #fffefa; }
+.ai-candidate p { margin: 0 0 8px; font-size: 13px; line-height: 1.5; max-height: 120px; overflow: auto; }
+.ai-candidate-actions { display: flex; gap: 6px; }
+.ai-candidate-actions button { display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px; font-size: 12px; }
+
+/* ===== Settings LLM ===== */
+.settings-input { width: 280px; height: 34px; padding: 0 10px; border: 1px solid var(--line); border-radius: 6px; font-size: 13px; }
+.toggle-label { display: inline-flex; align-items: center; cursor: pointer; }
+.toggle-label input { display: none; }
+.toggle-switch { width: 40px; height: 22px; border-radius: 12px; background: #d5cebe; display: inline-flex; align-items: center; padding: 0 3px; transition: background 0.15s; }
+.toggle-switch::after { content: ""; width: 16px; height: 16px; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,0.2); transition: transform 0.15s; }
+.toggle-switch.on { background: var(--accent); }
+.toggle-switch.on::after { transform: translateX(18px); }
+.capability-tags { display: flex; gap: 8px; }
+.cap-tag { display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px; border: 1px solid var(--line); border-radius: 999px; font-size: 12px; cursor: pointer; background: #fffaf0; }
+.cap-tag input { margin: 0; }

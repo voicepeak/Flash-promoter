@@ -3,13 +3,17 @@ import Fastify from "fastify";
 import { z } from "zod";
 import {
   adapterRegistry,
+  callLlm,
   createCanonicalPost,
   createId,
+  createLlmConfig,
   defaultPublishMode,
   generateStructuredPlatformAdaptation,
   generatePlatformDrafts,
   generateVideoPlatformAdaptation,
+  type AiActionRequest,
   type CreatePostInput,
+  type LlmConfig,
   type PlatformAccount,
   type PlatformDraft,
   type PlatformDraftUpdate,
@@ -380,6 +384,80 @@ export function createApp(repository: FlashPromoterRepository) {
     logs: repository.listPublishLogs()
   }));
 
+  // === LLM config ===
+  const llmConfigKey = "llm_config";
+
+  app.get("/api/settings/llm", async () => {
+    const post = repository.getPost(llmConfigKey);
+    if (!post) return { config: createLlmConfig() };
+    const raw = JSON.parse((post.body?.[0] as { text?: string } | undefined)?.text ?? "{}") as LlmConfig;
+    return { config: { ...raw, apiKeyEncrypted: maskKey(raw.apiKeyEncrypted) } };
+  });
+
+  app.post("/api/settings/llm", async (request, reply) => {
+    const body = request.body as Record<string, unknown>;
+    const config = createLlmConfig({
+      enabled: Boolean(body.enabled),
+      provider: String(body.provider ?? "openai-compatible"),
+      baseUrl: String(body.baseUrl ?? ""),
+      apiKeyEncrypted: String(body.apiKeyEncrypted ?? ""),
+      model: String(body.model ?? "gpt-4o"),
+      temperature: Number(body.temperature ?? 0.7),
+      timeoutMs: Number(body.timeoutMs ?? 30000),
+      maxTokens: body.maxTokens ? Number(body.maxTokens) : undefined,
+      capabilities: (body.capabilities as LlmConfig["capabilities"]) ?? { text: true, image: false, videoFrame: false, structuredOutput: true, longContext: true },
+      updatedAt: Date.now()
+    });
+    const existing = repository.getPost(llmConfigKey);
+    if (existing) {
+      existing.body = [{ type: "paragraph", text: JSON.stringify(config) }];
+      repository.updatePost(existing);
+    } else {
+      repository.createPost({
+        id: llmConfigKey, title: "LLM Config",
+        body: [{ type: "paragraph", text: JSON.stringify(config) }],
+        assets: [], tags: [], contentType: "article",
+        createdAt: Date.now(), updatedAt: Date.now()
+      });
+    }
+    return { ok: true, config: { ...config, apiKeyEncrypted: maskKey(config.apiKeyEncrypted) } };
+  });
+
+  app.post("/api/settings/llm/test", async (request, reply) => {
+    const body = request.body as Record<string, unknown>;
+    try {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 10000);
+      const res = await fetch(`${String(body.baseUrl)}/chat/completions`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${String(body.apiKeyEncrypted)}` },
+        body: JSON.stringify({ model: String(body.model), messages: [{ role: "user", content: "Hello" }], max_tokens: 5 }),
+        signal: controller.signal
+      });
+      clearTimeout(timer);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      return { ok: true, message: "连接成功" };
+    } catch (error) {
+      return reply.code(400).send({ ok: false, error: error instanceof Error ? error.message : "连接失败" });
+    }
+  });
+
+  // === AI Actions ===
+  app.post("/api/ai/actions", async (request, reply) => {
+    const existing = repository.getPost(llmConfigKey);
+    if (!existing) return reply.code(400).send({ error: "请先在设置中配置 LLM" });
+    const config = JSON.parse((existing.body[0] as { text?: string }).text ?? "{}") as LlmConfig;
+    if (!config.enabled || !config.apiKeyEncrypted) return reply.code(400).send({ error: "LLM 未启用或未配置 API Key" });
+    try {
+      const result = await callLlm(config, request.body as AiActionRequest);
+      repository.addPublishLog({ jobId: "ai", platform: "mock", level: "info", message: `AI ${result.action} on ${(request.body as AiActionRequest).slotKey}`, raw: result });
+      return result;
+    } catch (error) {
+      repository.addPublishLog({ jobId: "ai", platform: "mock", level: "error", message: `AI error: ${error instanceof Error ? error.message : ""}`, raw: {} });
+      return reply.code(500).send({ error: error instanceof Error ? error.message : "AI 调用失败" });
+    }
+  });
+
   return app;
 }
 
@@ -402,4 +480,9 @@ function accountFor(platform: PlatformId): PlatformAccount {
     displayName: "local-mvp",
     authType: platform === "mock" ? "mock" : "none"
   };
+}
+
+function maskKey(key: string): string {
+  if (!key || key.length < 8) return key;
+  return key.slice(0, 4) + "****" + key.slice(-4);
 }

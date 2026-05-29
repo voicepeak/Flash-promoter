@@ -8,7 +8,10 @@ import type {
   PublishLog,
   PublishMode,
   PublishResult,
-  ValidationResult
+  ValidationResult,
+  LlmConfig,
+  AiActionResult,
+  AiActionRequest
 } from "@flash-promoter/core";
 
 type CreatePostPayload = {
@@ -122,5 +125,13 @@ export const api = {
     }),
 
   jobs: () => request<{ jobs: PublishJob[] }>("/publish-jobs"),
-  logs: () => request<{ logs: PublishLog[] }>("/publish-logs")
+  logs: () => request<{ logs: PublishLog[] }>("/publish-logs"),
+
+  // LLM
+  getLlmConfig: () => request<{ config: LlmConfig }>("/settings/llm"),
+  saveLlmConfig: (config: Partial<LlmConfig>) => request<{ ok: boolean; config: LlmConfig }>("/settings/llm", { method: "POST", body: JSON.stringify(config) }),
+  testLlm: (config: Partial<LlmConfig>) => request<{ ok: boolean; message?: string; error?: string }>("/settings/llm/test", { method: "POST", body: JSON.stringify(config) }),
+
+  // AI Actions
+  aiAction: (req: AiActionRequest) => request<AiActionResult>("/ai/actions", { method: "POST", body: JSON.stringify(req) })
 };
