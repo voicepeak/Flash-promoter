@@ -4,6 +4,7 @@ import { ArrowLeft, ArrowRight, CheckCircle2, Save } from "lucide-react";
 import { marked } from "marked";
 import { sanitizeHtml } from "../html.js";
 import { api } from "../../api/client.js";
+import { AiFieldButton } from "../AiFieldButton.js";
 
 type Props = {
   drafts: PlatformDraft[];
@@ -61,20 +62,20 @@ export function StepEditConfirm(props: Props) {
           <div className="edit-left">
             <div className="field-grid">
               <label>
-                <span>平台标题</span>
+                <span className="field-label-row">平台标题 <AiFieldButton draft={draft} slotKey="title" fieldLabel="平台标题" currentValue={draft.title} contentType="article" onApply={(v, mode) => update(draft.id, { title: mode === "append" ? `${draft.title} ${v}` : v })} /></span>
                 <input value={draft.title} onChange={(e) => update(draft.id, { title: e.target.value })} />
               </label>
               <label>
-                <span>摘要</span>
+                <span className="field-label-row">摘要 <AiFieldButton draft={draft} slotKey="summary" fieldLabel="摘要" currentValue={draft.summary ?? ""} contentType="article" onApply={(v, mode) => update(draft.id, { summary: mode === "append" ? `${draft.summary ?? ""}\n${v}` : v })} /></span>
                 <input value={draft.summary ?? ""} onChange={(e) => update(draft.id, { summary: e.target.value })} />
               </label>
               <label className="wide-field">
-                <span>标签</span>
+                <span className="field-label-row">标签 <AiFieldButton draft={draft} slotKey="tags" fieldLabel="标签" currentValue={(draft.tags ?? []).join(", ")} contentType="article" onApply={(v, mode) => update(draft.id, { tags: [...(draft.tags ?? []), ...(mode === "replace" ? v.split(/[,，\n]/).map((s) => s.trim()).filter(Boolean) : [v])] })} /></span>
                 <input value={(draft.tags ?? []).join(", ")} onChange={(e) => update(draft.id, { tags: e.target.value.split(/[,，\n]/).map((s) => s.trim()).filter(Boolean) })} />
               </label>
             </div>
             <label className="wide-field draft-body-field" style={{ marginTop: 10 }}>
-              <span>正文</span>
+              <span className="field-label-row">正文 <AiFieldButton draft={draft} slotKey="body" fieldLabel="正文" currentValue={typeof draft.body === "string" ? draft.body : ""} contentType="article" onApply={(v, mode) => update(draft.id, { body: mode === "append" ? `${typeof draft.body === "string" ? draft.body : ""}\n\n${v}` : v })} /></span>
               <textarea value={typeof draft.body === "string" ? draft.body : JSON.stringify(draft.body, null, 2)} onChange={(e) => update(draft.id, { body: e.target.value })} style={{ height: 200 }} />
             </label>
 
