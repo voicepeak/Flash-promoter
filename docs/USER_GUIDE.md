@@ -10,23 +10,13 @@
 
 ## 启动
 
-启动 API：
+启动：
 
 ```bash
-npm run dev:api
+npm run dev
 ```
 
-启动桌面工作台：
-
-```bash
-npm run dev:desktop
-```
-
-打开浏览器访问：
-
-```text
-http://127.0.0.1:5173
-```
+打开浏览器访问 `http://127.0.0.1:5173`。API 运行于 `http://127.0.0.1:3333`。
 
 ## 基本流程
 
@@ -124,23 +114,13 @@ This guide explains how to use the `flash-promoter` local MVP for cross-platform
 
 ## Start
 
-Start the API:
+Start:
 
 ```bash
-npm run dev:api
+npm run dev
 ```
 
-Start the desktop workbench:
-
-```bash
-npm run dev:desktop
-```
-
-Open in browser:
-
-```text
-http://127.0.0.1:5173
-```
+Open `http://127.0.0.1:5173` in browser. API runs at `http://127.0.0.1:3333`.
 
 ## Basic Flow
 
