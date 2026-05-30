@@ -4,7 +4,6 @@ import { createId, now } from "../models.js";
 import { generateStructuredPlatformAdaptation } from "../ai/local.js";
 import { platformManifests } from "./manifests.js";
 import { createDraftBase, enforceNoDirectPublish, isPlatformRealPublishEnabled, performDryRun, simulatedResult, validateWithLimits } from "./common.js";
-import zlib from "node:zlib";
 
 async function getAccessToken(cred: Record<string, string>): Promise<{ token: string } | { error: string }> {
   try {
@@ -78,7 +77,8 @@ async function uploadWechatImage(accessToken: string, asset: Asset): Promise<{ m
 }
 
 /** Generate a valid minimal 300x250 PNG for cover fallback */
-function generateCoverPng(): Buffer {
+async function generateCoverPng(): Promise<Buffer> {
+  const { deflateSync } = await import("node:zlib");
   const w = 300, h = 250;
   const sig = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
   const ihdr = Buffer.alloc(13);
@@ -89,7 +89,7 @@ function generateCoverPng(): Buffer {
     const o = y * (1 + w * 3);
     for (let x = 0; x < w; x++) { raw[o + 1 + x * 3] = 59; raw[o + 1 + x * 3 + 1] = 130; raw[o + 1 + x * 3 + 2] = 246; }
   }
-  const idat = zlib.deflateSync(raw);
+  const idat = deflateSync(raw);
   const crc = (b: Buffer) => { let c = 0xFFFFFFFF; for (let i = 0; i < b.length; i++) { c ^= b[i]; for (let j = 0; j < 8; j++) c = (c >>> 1) ^ (c & 1 ? 0xEDB88320 : 0); } return (c ^ 0xFFFFFFFF) >>> 0; };
   const chunk = (t: string, d: Buffer) => { const l = Buffer.alloc(4); l.writeUInt32BE(d.length, 0); const b2 = Buffer.concat([Buffer.from(t), d]); const r = Buffer.alloc(4); r.writeUInt32BE(crc(b2), 0); return Buffer.concat([l, Buffer.from(t), d, r]); };
   return Buffer.concat([sig, chunk("IHDR", ihdr), chunk("IDAT", idat), chunk("IEND", Buffer.alloc(0))]);
@@ -160,7 +160,7 @@ export const wechatAdapter: PlatformAdapter = {
 
     // Fallback: generate a valid 300x250 PNG cover
     if (!thumbMediaId) {
-      const png = generateCoverPng();
+      const png = await generateCoverPng();
       const b64 = png.toString("base64");
       const result = await uploadWechatImage(token, { id: "fallback", type: "image", dataUrl: `data:image/png;base64,${b64}`, filename: "cover.png", mimeType: "image/png", createdAt: Date.now(), updatedAt: Date.now(), size: png.length } as Asset);
       if ("mediaId" in result) thumbMediaId = result.mediaId;
