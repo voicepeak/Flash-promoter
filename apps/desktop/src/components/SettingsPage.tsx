@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { AlertTriangle, Brain, CheckCircle2, Database, Loader2, Plug, Shield, Terminal, X } from "lucide-react";
+import { AlertTriangle, Brain, CheckCircle2, Database, Loader2, Plug, Terminal, X } from "lucide-react";
 import { platformLabels, type PlatformId, type LlmConfig, type LlmModelCapabilities } from "@flash-promoter/core";
 import { api } from "../api/client.js";
 
