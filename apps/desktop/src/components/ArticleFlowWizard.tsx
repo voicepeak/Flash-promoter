@@ -42,7 +42,8 @@ export function ArticleFlowWizard() {
       const title = analyzed?.title ?? "";
       const summary = analyzed?.summary ?? "";
       const tags = analyzed?.tags ?? [];
-      const created = await api.createPost({ title, body, summary, tags, inputFormat: "markdown", assets: [] });
+      const imgAssets = images.map((img) => ({ id: img.id, type: "image" as const, dataUrl: img.dataUrl, filename: img.filename, mimeType: "image/png", createdAt: Date.now(), updatedAt: Date.now() }));
+      const created = await api.createPost({ title, body, summary, tags, inputFormat: "markdown", assets: imgAssets });
       setCurrentPostId(created.id);
       const generated = await api.generateDrafts(created.id, selectedPlatforms);
       setDrafts(generated.items);
