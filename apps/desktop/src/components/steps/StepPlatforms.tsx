@@ -14,7 +14,8 @@ const platformInfo: { id: PlatformId; name: string; desc: string; modeLabel: str
   { id: "wechat", name: "微信公众号", desc: "适合长文内容，支持封面文案生成", modeLabel: "生成草稿" },
   { id: "bilibili", name: "B站", desc: "视频或专栏标题、分区建议和标签", modeLabel: "模拟发布" },
   { id: "zhihu-assist", name: "知乎", desc: "问答风格，自动匹配话题标签", modeLabel: "辅助发布" },
-  { id: "xhs-assist", name: "小红书", desc: "笔记正文、话题标签和图文卡片", modeLabel: "辅助发布" }
+  { id: "xhs-assist", name: "小红书", desc: "笔记正文、话题标签和图文卡片", modeLabel: "辅助发布" },
+  { id: "wordpress", name: "WordPress", desc: "博客文章，REST API 创建草稿/发布", modeLabel: "创建草稿" }
 ];
 
 export function StepPlatforms(props: Props) {
