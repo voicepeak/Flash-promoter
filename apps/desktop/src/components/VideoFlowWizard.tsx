@@ -51,8 +51,18 @@ export function VideoFlowWizard() {
   async function handlePublishAll() {
     setBusy(true); setMessage(null);
     const results: Record<string, PublishResult> = {};
-    for (const d of drafts) { try { const r = await api.publishDraft(d.id, "simulate", false); if (r.result) results[d.platform] = r.result; } catch { results[d.platform] = { platform: d.platform, mode: "simulate", status: "failed", message: "失败", createdAt: Date.now() }; } }
-    setPublishResults(results); setStep(5); showMessage("视频模拟发布完成"); setBusy(false);
+    let realCount = 0;
+    for (const d of drafts) {
+      try {
+        const r = await api.publishDraft(d.id, "simulate", false);
+        if (r.result) { results[d.platform] = r.result; if ((r.result.raw as Record<string, unknown>)?.realApiCalled) realCount++; }
+      } catch {
+        results[d.platform] = { platform: d.platform, mode: "simulate", status: "failed", message: "发布失败", createdAt: Date.now() };
+      }
+    }
+    setPublishResults(results); setStep(5);
+    showMessage(realCount > 0 ? `${realCount} 个平台真实发布完成` : "发布完成");
+    setBusy(false);
   }
 
   async function handleValidateAll(): Promise<boolean> {

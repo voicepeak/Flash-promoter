@@ -48,7 +48,7 @@ export function StepValidatePublish(props: Props) {
       <div className="step-actions">
         <button type="button" disabled={props.busy} onClick={props.onBack}><ArrowLeft size={17} /> 上一步</button>
         <button className="primary-button" type="button" disabled={props.busy || !props.allValid || errCount > 0} onClick={props.onPublish}>
-          <Send size={17} /> 模拟发布
+          <Send size={17} /> 发布
         </button>
       </div>
     </div>

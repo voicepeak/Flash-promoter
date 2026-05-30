@@ -51,11 +51,22 @@ export function ArticleFlowWizard() {
   async function handlePublishAll() {
     setBusy(true); setMessage(null);
     const results: Record<string, PublishResult> = {};
+    let realCount = 0;
     for (const draft of drafts) {
-      try { const mode = defaultModeForPlatform(draft.platform); const res = await api.publishDraft(draft.id, mode, false); if (res.result) results[draft.platform] = res.result; }
-      catch { results[draft.platform] = { platform: draft.platform, mode: "simulate", status: "failed", message: "模拟发布失败", createdAt: Date.now() }; }
+      try {
+        const mode = defaultModeForPlatform(draft.platform);
+        const res = await api.publishDraft(draft.id, mode, false);
+        if (res.result) {
+          results[draft.platform] = res.result;
+          if (res.result.raw && (res.result.raw as Record<string, unknown>).realApiCalled) realCount++;
+        }
+      } catch {
+        results[draft.platform] = { platform: draft.platform, mode: "simulate", status: "failed", message: "发布失败，请检查凭证和平台配置", createdAt: Date.now() };
+      }
     }
-    setPublishResults(results); setStep(5); showMessage("模拟发布完成"); setBusy(false);
+    setPublishResults(results); setStep(5);
+    showMessage(realCount > 0 ? `${realCount} 个平台真实发布完成，其余模拟` : "发布完成（部分平台未开启真实发布）");
+    setBusy(false);
   }
 
   async function handleValidateAll(): Promise<boolean> {
