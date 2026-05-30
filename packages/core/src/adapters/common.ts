@@ -1,9 +1,11 @@
 import type {
   CanonicalPost,
+  DryRunReport,
   PlatformAccount,
   PlatformDraft,
   PlatformId,
   PublishMode,
+  PublishOptions,
   PublishResult,
   PublishStatus
 } from "../models.js";
@@ -121,7 +123,7 @@ export function enforceNoDirectPublish(
   account: PlatformAccount,
   mode: PublishMode
 ): PublishResult | null {
-  if (mode !== "publish") {
+  if (mode !== "publish" && mode !== "submit") {
     return null;
   }
 
@@ -137,5 +139,141 @@ export function enforceNoDirectPublish(
       requiresSecondConfirmation: true
     },
     createdAt: now()
+  };
+}
+
+/* ===== Safety: REAL_PUBLISH_ENABLED ===== */
+
+let realPublishEnabled = false;
+const platformSwitches: Record<string, boolean> = {};
+
+export function setRealPublishEnabled(enabled: boolean): void {
+  realPublishEnabled = enabled;
+}
+
+export function isRealPublishEnabled(): boolean {
+  return realPublishEnabled;
+}
+
+export function setPlatformRealPublishEnabled(platform: PlatformId, enabled: boolean): void {
+  platformSwitches[platform] = enabled;
+}
+
+export function isPlatformRealPublishEnabled(platform: PlatformId): boolean {
+  if (!realPublishEnabled) return false;
+  if (platformSwitches[platform] === false) return false;
+  return true;
+}
+
+/* ===== Dry Run ===== */
+
+export async function performDryRun(
+  platform: PlatformId,
+  account: PlatformAccount,
+  mode: PublishMode,
+  draft: PlatformDraft
+): Promise<DryRunReport> {
+  const checks = {
+    accountValid: account.status === "active",
+    permissionsOk: account.authType !== "none" && account.authType !== "mock",
+    contentValid: draft.validation?.ok ?? true,
+    assetsReady: true,
+    apiCalls: [] as string[]
+  };
+
+  const errors: string[] = [];
+
+  if (!checks.accountValid) {
+    errors.push("账号状态无效");
+  }
+
+  if (!checks.permissionsOk && mode !== "simulate") {
+    errors.push("缺少平台授权凭证");
+  }
+
+  if (!checks.contentValid) {
+    errors.push("内容校验未通过");
+  }
+
+  if (draft.assets) {
+    const missing = draft.assets.filter((a) => !a.localPath && !a.dataUrl);
+    if (missing.length) {
+      errors.push(`${missing.length} 个资源缺少本地路径`);
+      checks.assetsReady = false;
+    }
+  }
+
+  return {
+    platform,
+    mode,
+    accountId: account.id,
+    checks,
+    errors,
+    createdAt: now()
+  };
+}
+
+/* ===== Second Confirmation ===== */
+
+export function confirmPublishResult(platform: PlatformId, mode: PublishMode): string {
+  return `你即将调用官方接口以「${mode}」模式将内容提交到「${platform}」平台。
+该操作可能产生公开内容或审核任务。
+请确认继续。`;
+}
+
+/* ===== Copy / Share / Assist Helpers ===== */
+
+export function assistOpenedResult(
+  platform: PlatformId,
+  mode: PublishMode,
+  status: PublishStatus,
+  message: string,
+  assistUrl?: string,
+  extra?: Record<string, unknown>
+): PublishResult {
+  return {
+    platform,
+    mode,
+    status,
+    externalId: createId(`${platform.replace("-assist", "")}_assist`),
+    url: assistUrl,
+    message,
+    raw: {
+      simulated: true,
+      realPlatformCalled: false,
+      browserAssistPackage: {
+        openUrl: assistUrl,
+        finalPublishAction: "manual-only",
+        ...extra
+      }
+    },
+    createdAt: now()
+  };
+}
+
+export function copiedResult(
+  platform: PlatformId,
+  message: string,
+  fields: string[]
+): PublishResult {
+  return {
+    platform,
+    mode: "copy" as PublishMode,
+    status: "copied",
+    message,
+    raw: {
+      copiedFields: fields,
+      realPlatformCalled: false,
+      finalPublishAction: "manual-only"
+    },
+    createdAt: now()
+  };
+}
+
+export function defaultPublishOptions(mode: PublishMode): PublishOptions {
+  return {
+    dryRun: mode !== "simulate",
+    confirmed: mode === "publish" || mode === "submit",
+    visibility: "draft"
   };
 }

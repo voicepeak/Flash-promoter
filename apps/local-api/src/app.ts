@@ -26,8 +26,13 @@ import {
 } from "@flash-promoter/core";
 import { FlashPromoterRepository } from "@flash-promoter/storage";
 
-const platformIdSchema = z.enum(["mock", "wechat", "bilibili", "zhihu-assist", "xhs-assist"]);
-const publishModeSchema = z.enum(["simulate", "draft", "assist", "publish"]);
+const platformIdSchema = z.enum([
+  "mock", "wechat", "bilibili", "zhihu-assist", "xhs-assist", "wordpress",
+  "douyin", "kuaishou", "youtube", "instagram", "threads", "facebook-pages", "x-twitter", "linkedin",
+  "pinterest", "reddit", "medium", "mastodon", "bluesky", "telegram-channel", "discord", "ghost",
+  "toutiao", "baijiahao", "csdn", "juejin", "jianshu", "douban", "notion"
+]);
+const publishModeSchema = z.enum(["simulate", "copy", "share", "assist", "draft", "submit", "publish"]);
 
 const createPostSchema = z.object({
   title: z.string().min(1),
@@ -36,7 +41,7 @@ const createPostSchema = z.object({
   summary: z.string().optional(),
   tags: z.array(z.string()).optional(),
   inputFormat: z.enum(["markdown", "html", "text"]).default("markdown"),
-  contentType: z.enum(["article", "video", "image-note", "qa-answer"]).default("article"),
+  contentType: z.enum(["article", "video", "image-note", "qa-answer", "short-text", "long-form", "carousel", "link-post"]).default("article"),
   topic: z.string().optional(),
   script: z.string().optional(),
   transcript: z.string().optional(),
@@ -63,7 +68,7 @@ const createPostSchema = z.object({
 });
 
 const generateSchema = z.object({
-  platforms: z.array(platformIdSchema).default(["wechat", "bilibili", "zhihu-assist", "xhs-assist"]),
+  platforms: z.array(platformIdSchema).default(["wechat", "bilibili", "zhihu-assist", "xhs-assist", "wordpress"]),
   style: z.literal("balanced").default("balanced")
 });
 
@@ -92,18 +97,24 @@ export function createApp(repository: FlashPromoterRepository) {
   app.get("/api/health", async () => ({
     ok: true,
     name: "flash-promoter",
-    adapters: adapterRegistry.list().map((adapter) => adapter.id)
+    adapters: adapterRegistry.list().map((adapter) => adapter.manifest.id)
   }));
 
   app.get("/api/adapters", async () => ({
     adapters: adapterRegistry.list().map((adapter) => ({
-      id: adapter.id,
-      name: adapter.name,
-      capabilities: adapter.capabilities,
+      id: adapter.manifest.id,
+      name: adapter.manifest.name,
+      capabilities: {
+        supportsDraft: adapter.manifest.publishLevels.includes("draft"),
+        supportsDirectPublish: adapter.manifest.publishLevels.includes("publish"),
+        supportsAssistPublish: adapter.manifest.publishLevels.includes("assist"),
+        supportsSchedule: false,
+        contentTypes: adapter.manifest.supportedContentTypes
+      },
       defaultMode:
-        adapter.id === "mock"
+        adapter.manifest.id === "mock"
           ? "simulate"
-          : defaultPublishMode[adapter.id as keyof typeof defaultPublishMode]
+          : defaultPublishMode[adapter.manifest.id] ?? "simulate"
     }))
   }));
 
@@ -465,6 +476,114 @@ export function createApp(repository: FlashPromoterRepository) {
     logs: repository.listPublishLogs()
   }));
 
+  // === Independent Publish-Level Endpoints ===
+
+  app.post<{ Params: { draftId: string } }>("/api/drafts/:draftId/create-draft", async (request, reply) => {
+    const draft = repository.getPlatformDraft(request.params.draftId);
+    if (!draft) return reply.code(404).send({ error: "draft_not_found" });
+    const adapter = adapterRegistry.get(draft.platform);
+    if (!adapter.createDraft) return reply.code(400).send({ error: "createDraft not supported for this platform" });
+    const result = await adapter.createDraft(draft, accountFor(draft.platform));
+    return { result };
+  });
+
+  app.post<{ Params: { draftId: string } }>("/api/drafts/:draftId/submit", async (request, reply) => {
+    const draft = repository.getPlatformDraft(request.params.draftId);
+    if (!draft) return reply.code(404).send({ error: "draft_not_found" });
+    const adapter = adapterRegistry.get(draft.platform);
+    if (!adapter.submit) return reply.code(400).send({ error: "submit not supported for this platform" });
+    const result = await adapter.submit(draft, accountFor(draft.platform), { dryRun: false, confirmed: false });
+    return { result };
+  });
+
+  app.post<{ Params: { draftId: string } }>("/api/drafts/:draftId/prepare-assets", async (request, reply) => {
+    const draft = repository.getPlatformDraft(request.params.draftId);
+    if (!draft) return reply.code(404).send({ error: "draft_not_found" });
+    const adapter = adapterRegistry.get(draft.platform);
+    if (!adapter.prepareAssets) return reply.code(400).send({ error: "prepareAssets not supported for this platform" });
+    const result = await adapter.prepareAssets(draft, accountFor(draft.platform));
+    return { result };
+  });
+
+  app.post<{ Params: { draftId: string } }>("/api/drafts/:draftId/dry-run", async (request, reply) => {
+    const draft = repository.getPlatformDraft(request.params.draftId);
+    if (!draft) return reply.code(404).send({ error: "draft_not_found" });
+    const adapter = adapterRegistry.get(draft.platform);
+    if (!adapter.dryRun) return reply.code(400).send({ error: "dryRun not supported for this platform" });
+    const parsed = publishSchema.parse(request.body ?? {});
+    const result = await adapter.dryRun(draft, accountFor(draft.platform), parsed.mode ?? defaultModeForPlatform(draft.platform));
+    return { result };
+  });
+
+  app.get<{ Params: { draftId: string } }>("/api/drafts/:draftId/status", async (request, reply) => {
+    const draft = repository.getPlatformDraft(request.params.draftId);
+    if (!draft) return reply.code(404).send({ error: "draft_not_found" });
+    const job = repository.listPublishJobs().find((j) => j.draftId === draft.id);
+    if (!job || !job.externalId) return reply.code(404).send({ error: "no_published_external_id" });
+    const adapter = adapterRegistry.get(draft.platform);
+    if (!adapter.getStatus) return reply.code(400).send({ error: "getStatus not supported for this platform" });
+    const result = await adapter.getStatus(job.externalId, accountFor(draft.platform));
+    return { result };
+  });
+
+  app.get<{ Params: { draftId: string } }>("/api/drafts/:draftId/metrics", async (request, reply) => {
+    const draft = repository.getPlatformDraft(request.params.draftId);
+    if (!draft) return reply.code(404).send({ error: "draft_not_found" });
+    const job = repository.listPublishJobs().find((j) => j.draftId === draft.id);
+    if (!job || !job.externalId) return reply.code(404).send({ error: "no_published_external_id" });
+    const adapter = adapterRegistry.get(draft.platform);
+    if (!adapter.getMetrics) return reply.code(400).send({ error: "getMetrics not supported for this platform" });
+    const result = await adapter.getMetrics(job.externalId, accountFor(draft.platform));
+    return { result };
+  });
+
+  // === Account Management ===
+
+  app.get("/api/accounts", async () => ({
+    accounts: repository.listAccounts()
+  }));
+
+  app.get<{ Params: { accountId: string } }>("/api/accounts/:accountId", async (request, reply) => {
+    const account = repository.getAccount(request.params.accountId);
+    if (!account) return reply.code(404).send({ error: "account_not_found" });
+    return { account: { ...account, encryptedCredentials: "***" } };
+  });
+
+  app.post("/api/accounts", async (request, reply) => {
+    const body = request.body as Record<string, unknown>;
+    const account = repository.createAccount({
+      id: createId("acct"),
+      platform: String(body.platform) as PlatformId,
+      displayName: String(body.displayName ?? ""),
+      authType: String(body.authType ?? "none") as PlatformAccount["authType"],
+      encryptedCredentials: String(body.encryptedCredentials ?? ""),
+      scopes: Array.isArray(body.scopes) ? (body.scopes as string[]) : [],
+      status: "active",
+      createdAt: Date.now(),
+      updatedAt: Date.now()
+    });
+    return reply.code(201).send({ account: { ...account, encryptedCredentials: "***" } });
+  });
+
+  app.put<{ Params: { accountId: string } }>("/api/accounts/:accountId", async (request, reply) => {
+    const existing = repository.getAccount(request.params.accountId);
+    if (!existing) return reply.code(404).send({ error: "account_not_found" });
+    const body = request.body as Record<string, unknown>;
+    const updated = repository.updateAccount(request.params.accountId, {
+      displayName: body.displayName !== undefined ? String(body.displayName) : undefined,
+      scopes: body.scopes !== undefined ? (Array.isArray(body.scopes) ? (body.scopes as string[]) : []) : undefined,
+      status: body.status !== undefined ? String(body.status) as PlatformAccount["status"] : undefined,
+      encryptedCredentials: body.encryptedCredentials !== undefined ? String(body.encryptedCredentials) : undefined
+    });
+    return { account: updated ? { ...updated, encryptedCredentials: "***" } : null };
+  });
+
+  app.delete<{ Params: { accountId: string } }>("/api/accounts/:accountId", async (request, reply) => {
+    const deleted = repository.deleteAccount(request.params.accountId);
+    if (!deleted) return reply.code(404).send({ error: "account_not_found" });
+    return reply.code(204).send();
+  });
+
   // === LLM config ===
   const llmConfigKey = "llm_config";
 
@@ -555,11 +674,17 @@ function defaultModeForPlatform(platform: PlatformId): PublishMode {
 }
 
 function accountFor(platform: PlatformId): PlatformAccount {
+  const timestamp = Date.now();
   return {
     id: `local-${platform}`,
     platform,
     displayName: "local-mvp",
-    authType: platform === "mock" ? "mock" : "none"
+    authType: platform === "mock" ? "mock" : "none",
+    encryptedCredentials: "",
+    scopes: [],
+    status: "active",
+    createdAt: timestamp,
+    updatedAt: timestamp
   };
 }
 

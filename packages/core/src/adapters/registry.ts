@@ -1,11 +1,12 @@
 import type { PlatformId } from "../models.js";
 import type { PlatformAdapter } from "./types.js";
+import { platformManifests } from "./manifests.js";
 
 export class AdapterRegistry {
   private readonly adapters = new Map<PlatformId, PlatformAdapter>();
 
   register(adapter: PlatformAdapter): void {
-    this.adapters.set(adapter.id, adapter);
+    this.adapters.set(adapter.manifest.id, adapter);
   }
 
   get(id: PlatformId): PlatformAdapter {
@@ -18,5 +19,13 @@ export class AdapterRegistry {
 
   list(): PlatformAdapter[] {
     return Array.from(this.adapters.values());
+  }
+
+  listManifests(): PlatformAdapter[] {
+    return Array.from(this.adapters.values());
+  }
+
+  getManifest(id: PlatformId) {
+    return platformManifests[id] ?? null;
   }
 }

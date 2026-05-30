@@ -50,8 +50,11 @@ export function PlatformPreview(props: Props) {
       <div className="preview-actions">
         <select value={mode} onChange={(event) => props.onModeChange(draft.platform, event.target.value as PublishMode)}>
           <option value="simulate">simulate</option>
-          <option value="draft">draft</option>
+          <option value="copy">copy</option>
+          <option value="share">share</option>
           <option value="assist">assist</option>
+          <option value="draft">draft</option>
+          <option value="submit">submit</option>
           <option value="publish">publish</option>
         </select>
         <button type="button" disabled={props.busy} onClick={() => props.onValidate(draft)}>

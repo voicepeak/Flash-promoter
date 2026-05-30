@@ -3,7 +3,7 @@ import { createId, now } from "../models.js";
 
 type LlmCallFn = (prompt: string) => Promise<string>;
 
-const platformRecipes: Record<PlatformId, { name: string; style: string; outputFormat: string }> = {
+const platformRecipes: Partial<Record<PlatformId, { name: string; style: string; outputFormat: string }>> = {
   wechat: {
     name: "微信公众号",
     style: "长文风格，适合深度阅读。需要有引人入胜的导语、清晰的小标题结构、克制的表达。导语约 2-3 句，正文分 3-5 个小节。标题 20 字以内。",
