@@ -133,5 +133,9 @@ export const api = {
   testLlm: (config: Partial<LlmConfig>) => request<{ ok: boolean; message?: string; error?: string }>("/settings/llm/test", { method: "POST", body: JSON.stringify(config) }),
 
   // AI Actions
-  aiAction: (req: AiActionRequest) => request<AiActionResult>("/ai/actions", { method: "POST", body: JSON.stringify(req) })
+  aiAction: (req: AiActionRequest) => request<AiActionResult>("/ai/actions", { method: "POST", body: JSON.stringify(req) }),
+
+  // Safety
+  getSafety: () => request<{ realPublishEnabled: boolean; platformSwitches: Record<string, boolean>; platformGuides: Array<{ id: string; name: string; authType: string; setupNote: string; setupUrl: string; docs: string[]; publishLevels: string[]; riskLevel: string; defaultMode: string }> }>("/settings/safety"),
+  saveSafety: (body: { realPublishEnabled?: boolean; platformSwitches?: Record<string, boolean> }) => request<{ ok: boolean }>("/settings/safety", { method: "POST", body: JSON.stringify(body) })
 };

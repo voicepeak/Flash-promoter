@@ -9,6 +9,7 @@ export * from "./adapters/types.js";
 export * from "./adapters/registry.js";
 export * from "./adapters/index.js";
 export * from "./adapters/manifests.js";
+export * from "./adapters/common.js";
 export * from "./adapters/field-mapping.js";
 export * from "./pipeline/generate.js";
 export * from "./pipeline/video.js";

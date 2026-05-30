@@ -12,7 +12,12 @@ import {
   generatePlatformDrafts,
   generateStructuredPlatformAdaptation,
   generateVideoPlatformAdaptation,
+  isRealPublishEnabled,
+  isPlatformRealPublishEnabled,
   parsePlatformDraft,
+  platformManifests,
+  setRealPublishEnabled,
+  setPlatformRealPublishEnabled,
   type AiActionRequest,
   type CreatePostInput,
   type LlmConfig,
@@ -656,6 +661,43 @@ export function createApp(repository: FlashPromoterRepository) {
       repository.addPublishLog({ jobId: "ai", platform: "mock", level: "error", message: `AI error: ${error instanceof Error ? error.message : ""}`, raw: {} });
       return reply.code(500).send({ error: error instanceof Error ? error.message : "AI 调用失败" });
     }
+  });
+
+  // === Safety / Real Publish ===
+  app.get("/api/settings/safety", async () => {
+    const switches: Record<string, boolean> = {};
+    for (const manifest of Object.values(platformManifests)) {
+      switches[manifest.id] = isPlatformRealPublishEnabled(manifest.id) && manifest.publishLevels.some((l) => l === "submit" || l === "publish");
+    }
+    return {
+      realPublishEnabled: isRealPublishEnabled(),
+      platformSwitches: switches,
+      platformGuides: Object.values(platformManifests).filter((m) => m.id !== "mock").map((m) => ({
+        id: m.id,
+        name: m.name,
+        authType: m.auth.type,
+        setupNote: m.auth.note ?? "",
+        setupUrl: m.auth.setupUrl ?? "",
+        docs: m.docs ?? [],
+        publishLevels: m.publishLevels,
+        riskLevel: m.riskLevel,
+        defaultMode: m.defaultMode,
+        supportedContentTypes: m.supportedContentTypes
+      }))
+    };
+  });
+
+  app.post("/api/settings/safety", async (request, reply) => {
+    const body = request.body as Record<string, unknown>;
+    if (typeof body.realPublishEnabled === "boolean") {
+      setRealPublishEnabled(body.realPublishEnabled);
+    }
+    if (body.platformSwitches && typeof body.platformSwitches === "object") {
+      for (const [platform, enabled] of Object.entries(body.platformSwitches as Record<string, boolean>)) {
+        setPlatformRealPublishEnabled(platform as PlatformId, enabled);
+      }
+    }
+    return { ok: true };
   });
 
   return app;
