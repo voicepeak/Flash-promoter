@@ -9,7 +9,7 @@
   ],
   "scripts": {
     "dev": "concurrently -n api,desktop -c green,blue \"npm run dev:api\" \"npm run dev:desktop\"",
-    "dev:api": "npm run dev --workspace @flash-promoter/local-api",
+    "dev:api": "tsx apps/local-api/src/server.ts",
     "dev:desktop": "npm run dev --workspace @flash-promoter/desktop",
     "build": "npm run build --workspaces",
     "typecheck": "npm run typecheck --workspaces",
