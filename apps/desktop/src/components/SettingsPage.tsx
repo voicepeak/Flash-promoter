@@ -11,25 +11,25 @@ const setupGuides: Record<string, { title: string; steps: string[]; fields: { ke
   wechat: {
     title: "微信公众号 AppID / AppSecret 配置",
     steps: [
-      "1. 登录微信公众平台 https://mp.weixin.qq.com",
-      "2. 左侧菜单「开发」→「基本配置」",
-      "3. 获取 AppID（开发者 ID）",
-      "4. 点击「重置」获取 AppSecret，扫码验证后复制",
-      "5. 将 AppID 和 AppSecret 填入下方，点击保存",
-      "6. 如需 IP 白名单，在「基本配置」中添加本机公网 IP"
+      "1. 登录微信公众平台 https://mp.weixin.qq.com（或开发者平台 developers.weixin.qq.com）",
+      "2. 进入「设置与开发」→「基本配置」（开发者平台则为「开发信息」）",
+      "3. 页面上的「开发者 ID(AppID)」即为 AppID",
+      "4. 点击 AppSecret 旁的「重置」按钮，用管理员微信扫码",
+      "5. 扫码后 AppSecret 会短暂显示在页面上，立即复制",
+      "6. 注意：AppSecret 仅显示一次，关闭后无法再次查看"
     ],
     fields: [
-      { key: "appId", label: "AppID", placeholder: "wxXXXXXXXXXXXXXXXX" },
-      { key: "appSecret", label: "AppSecret", placeholder: "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" }
+      { key: "appId", label: "AppID（开发者 ID）", placeholder: "wxXXXXXXXXXXXXXXXX" },
+      { key: "appSecret", label: "AppSecret（开发者密码）", placeholder: "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" }
     ]
   },
   bilibili: {
     title: "B站开放平台 OAuth 凭证",
     steps: [
-      "1. 登录 B站开放平台 https://open.bilibili.com",
-      "2. 创建应用：选择「能力接入」→「创建应用」",
-      "3. 填写应用名称、描述、回调地址（可用 http://localhost:3333/callback）",
-      "4. 获取 client_id 和 client_secret",
+      "1. 登录 B站开放平台 https://openhome.bilibili.com",
+      "2. 进入「开发者中心」→「创建应用」",
+      "3. 填写应用名称、描述，回调地址填 http://localhost:3333/callback",
+      "4. 提交审核通过后，在「应用详情」中查看 client_id 和 client_secret",
       "5. 将凭证填入下方，点击保存"
     ],
     fields: [
@@ -68,13 +68,13 @@ export function SettingsPage() {
   const [savingCred, setSavingCred] = useState<string | null>(null);
 
   // LLM
-  const [llmForm, setLlmForm] = useState({ enabled: false, baseUrl: "https://api.openai.com/v1", apiKeyEncrypted: "", model: "gpt-4o", temperature: 0.7, timeoutMs: 30000, maxTokens: 4096, capabilities: { text: true, image: false, videoFrame: false, structuredOutput: true, longContext: true } as LlmModelCapabilities });
+  const [llmForm, setLlmForm] = useState({ enabled: false, baseUrl: "https://api.openai.com/v1", apiKeyEncrypted: "", model: "gpt-4o", temperature: 0.7, timeoutMs: 30000, maxTokens: 4096, imageBaseUrl: "", imageApiKey: "", imageModel: "dall-e-3", capabilities: { text: true, image: false, videoFrame: false, structuredOutput: true, longContext: true } as LlmModelCapabilities });
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<"ok" | "fail" | null>(null);
   const [savingLlm, setSavingLlm] = useState(false);
 
   useEffect(() => {
-    api.getLlmConfig().then((r) => { if (r.config.baseUrl) setLlmForm({ enabled: r.config.enabled, baseUrl: r.config.baseUrl, apiKeyEncrypted: r.config.apiKeyEncrypted, model: r.config.model, temperature: r.config.temperature, timeoutMs: r.config.timeoutMs, maxTokens: r.config.maxTokens ?? 4096, capabilities: r.config.capabilities }); }).catch(() => {});
+    api.getLlmConfig().then((r) => { if (r.config.baseUrl) setLlmForm({ enabled: r.config.enabled, baseUrl: r.config.baseUrl, apiKeyEncrypted: r.config.apiKeyEncrypted, model: r.config.model, temperature: r.config.temperature, timeoutMs: r.config.timeoutMs, maxTokens: r.config.maxTokens ?? 4096, imageBaseUrl: (r.config as Record<string, unknown>).imageBaseUrl as string ?? "", imageApiKey: (r.config as Record<string, unknown>).imageApiKey as string ?? "", imageModel: (r.config as Record<string, unknown>).imageModel as string ?? "dall-e-3", capabilities: r.config.capabilities }); }).catch(() => {});
     api.getSafety().then((r) => { setGlobalSafety(r.realPublishEnabled); setPlatformSwitches(r.platformSwitches); setGuides(r.platformGuides.filter((g) => p0Platforms.includes(g.id as PlatformId))); }).catch(() => {});
     api.getPlatformAccounts().then((r) => setAccounts(r.accounts)).catch(() => {});
   }, []);
@@ -221,6 +221,12 @@ export function SettingsPage() {
           <div className="settings-row"><span>Timeout (ms)</span><input className="settings-input" type="number" value={llmForm.timeoutMs} onChange={(e) => setLlmForm({ ...llmForm, timeoutMs: Number(e.target.value) })} /></div>
           <div className="settings-row"><span>Max Tokens</span><input className="settings-input" type="number" value={llmForm.maxTokens} onChange={(e) => setLlmForm({ ...llmForm, maxTokens: Number(e.target.value) })} /></div>
           <div className="settings-row"><span>模型能力</span><div className="capability-tags">{(["text", "image", "videoFrame"] as const).map((k) => (<label key={k} className="cap-tag"><input type="checkbox" checked={llmForm.capabilities[k]} onChange={(e) => setLlmForm({ ...llmForm, capabilities: { ...llmForm.capabilities, [k]: e.target.checked } })} />{k === "text" ? "文本" : k === "image" ? "图片" : "视频帧"}</label>))}</div></div>
+          <div className="settings-row" style={{ borderTop: "1px dashed var(--line)", paddingTop: 10, marginTop: 6 }}>
+            <span style={{ fontWeight: 600 }}>🎨 AI 生图配置</span>
+          </div>
+          <div className="settings-row"><span>生图 API URL</span><input className="settings-input" value={llmForm.imageBaseUrl} onChange={(e) => setLlmForm({ ...llmForm, imageBaseUrl: e.target.value })} placeholder="留空则复用 Base URL" /></div>
+          <div className="settings-row"><span>生图 API Key</span><input className="settings-input" type="password" value={llmForm.imageApiKey} onChange={(e) => setLlmForm({ ...llmForm, imageApiKey: e.target.value })} placeholder="留空则复用主 API Key" /></div>
+          <div className="settings-row"><span>生图 Model</span><input className="settings-input" value={llmForm.imageModel} onChange={(e) => setLlmForm({ ...llmForm, imageModel: e.target.value })} placeholder="dall-e-3" /></div>
         </div>
         <div style={{ display: "flex", gap: 10, marginTop: 14, alignItems: "center" }}>
           <button type="button" className="primary-button" disabled={savingLlm} onClick={saveLlm}>{savingLlm ? "保存中…" : "保存配置"}</button>

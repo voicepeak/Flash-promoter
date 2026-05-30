@@ -93,6 +93,18 @@ const updateDraftSchema = z.object({
 });
 
 export function createApp(repository: FlashPromoterRepository) {
+  // Restore persisted safety state on startup
+  try {
+    const sp = repository.getPost("safety_config");
+    if (sp) {
+      const state = JSON.parse((sp.body[0] as { text?: string }).text ?? "{}") as { realPublishEnabled: boolean; platformSwitches: Record<string, boolean> };
+      setRealPublishEnabled(state.realPublishEnabled);
+      for (const [platform, enabled] of Object.entries(state.platformSwitches ?? {})) {
+        setPlatformRealPublishEnabled(platform as PlatformId, enabled);
+      }
+    }
+  } catch {}
+
   const app = Fastify({ logger: true });
 
   app.register(cors, {
@@ -433,7 +445,7 @@ export function createApp(repository: FlashPromoterRepository) {
 
     try {
       const adapter = adapterRegistry.get(draft.platform);
-      const result = await adapter.publish(draft, accountFor(draft.platform), mode);
+      const result = await adapter.publish(draft, accountFor(draft.platform, repository), mode);
       repository.updatePublishJob(job.id, result.status, result, result.errorMessage);
       repository.addPublishLog({
         jobId: job.id,
@@ -488,7 +500,7 @@ export function createApp(repository: FlashPromoterRepository) {
     if (!draft) return reply.code(404).send({ error: "draft_not_found" });
     const adapter = adapterRegistry.get(draft.platform);
     if (!adapter.createDraft) return reply.code(400).send({ error: "createDraft not supported for this platform" });
-    const result = await adapter.createDraft(draft, accountFor(draft.platform));
+    const result = await adapter.createDraft(draft, accountFor(draft.platform, repository));
     return { result };
   });
 
@@ -497,7 +509,7 @@ export function createApp(repository: FlashPromoterRepository) {
     if (!draft) return reply.code(404).send({ error: "draft_not_found" });
     const adapter = adapterRegistry.get(draft.platform);
     if (!adapter.submit) return reply.code(400).send({ error: "submit not supported for this platform" });
-    const result = await adapter.submit(draft, accountFor(draft.platform), { dryRun: false, confirmed: false });
+    const result = await adapter.submit(draft, accountFor(draft.platform, repository), { dryRun: false, confirmed: false });
     return { result };
   });
 
@@ -506,7 +518,7 @@ export function createApp(repository: FlashPromoterRepository) {
     if (!draft) return reply.code(404).send({ error: "draft_not_found" });
     const adapter = adapterRegistry.get(draft.platform);
     if (!adapter.prepareAssets) return reply.code(400).send({ error: "prepareAssets not supported for this platform" });
-    const result = await adapter.prepareAssets(draft, accountFor(draft.platform));
+    const result = await adapter.prepareAssets(draft, accountFor(draft.platform, repository));
     return { result };
   });
 
@@ -516,7 +528,7 @@ export function createApp(repository: FlashPromoterRepository) {
     const adapter = adapterRegistry.get(draft.platform);
     if (!adapter.dryRun) return reply.code(400).send({ error: "dryRun not supported for this platform" });
     const parsed = publishSchema.parse(request.body ?? {});
-    const result = await adapter.dryRun(draft, accountFor(draft.platform), parsed.mode ?? defaultModeForPlatform(draft.platform));
+    const result = await adapter.dryRun(draft, accountFor(draft.platform, repository), parsed.mode ?? defaultModeForPlatform(draft.platform));
     return { result };
   });
 
@@ -527,7 +539,7 @@ export function createApp(repository: FlashPromoterRepository) {
     if (!job || !job.externalId) return reply.code(404).send({ error: "no_published_external_id" });
     const adapter = adapterRegistry.get(draft.platform);
     if (!adapter.getStatus) return reply.code(400).send({ error: "getStatus not supported for this platform" });
-    const result = await adapter.getStatus(job.externalId, accountFor(draft.platform));
+    const result = await adapter.getStatus(job.externalId, accountFor(draft.platform, repository));
     return { result };
   });
 
@@ -538,7 +550,7 @@ export function createApp(repository: FlashPromoterRepository) {
     if (!job || !job.externalId) return reply.code(404).send({ error: "no_published_external_id" });
     const adapter = adapterRegistry.get(draft.platform);
     if (!adapter.getMetrics) return reply.code(400).send({ error: "getMetrics not supported for this platform" });
-    const result = await adapter.getMetrics(job.externalId, accountFor(draft.platform));
+    const result = await adapter.getMetrics(job.externalId, accountFor(draft.platform, repository));
     return { result };
   });
 
@@ -665,37 +677,52 @@ export function createApp(repository: FlashPromoterRepository) {
 
   // === Safety / Real Publish ===
   app.get("/api/settings/safety", async () => {
+    // Load persisted state
+    let persisted = { realPublishEnabled: false, platformSwitches: {} as Record<string, boolean> };
+    try {
+      const sp = repository.getPost("safety_config");
+      if (sp) persisted = JSON.parse((sp.body[0] as { text?: string }).text ?? "{}") as typeof persisted;
+    } catch {}
     const switches: Record<string, boolean> = {};
     for (const manifest of Object.values(platformManifests)) {
-      switches[manifest.id] = isPlatformRealPublishEnabled(manifest.id) && manifest.publishLevels.some((l) => l === "submit" || l === "publish");
+      switches[manifest.id] = (persisted.platformSwitches[manifest.id] ?? false) && manifest.publishLevels.some((l) => l === "submit" || l === "publish");
     }
     return {
-      realPublishEnabled: isRealPublishEnabled(),
+      realPublishEnabled: persisted.realPublishEnabled,
       platformSwitches: switches,
       platformGuides: Object.values(platformManifests).filter((m) => m.id !== "mock").map((m) => ({
-        id: m.id,
-        name: m.name,
-        authType: m.auth.type,
-        setupNote: m.auth.note ?? "",
-        setupUrl: m.auth.setupUrl ?? "",
-        docs: m.docs ?? [],
-        publishLevels: m.publishLevels,
-        riskLevel: m.riskLevel,
-        defaultMode: m.defaultMode,
-        supportedContentTypes: m.supportedContentTypes
+        id: m.id, name: m.name, authType: m.auth.type, setupNote: m.auth.note ?? "", setupUrl: m.auth.setupUrl ?? "",
+        docs: m.docs ?? [], publishLevels: m.publishLevels, riskLevel: m.riskLevel, defaultMode: m.defaultMode, supportedContentTypes: m.supportedContentTypes
       }))
     };
   });
 
   app.post("/api/settings/safety", async (request, reply) => {
     const body = request.body as Record<string, unknown>;
+    let state = { realPublishEnabled: false, platformSwitches: {} as Record<string, boolean> };
+    try {
+      const sp = repository.getPost("safety_config");
+      if (sp) state = JSON.parse((sp.body[0] as { text?: string }).text ?? "{}") as typeof state;
+    } catch {}
+
     if (typeof body.realPublishEnabled === "boolean") {
+      state.realPublishEnabled = body.realPublishEnabled;
       setRealPublishEnabled(body.realPublishEnabled);
     }
     if (body.platformSwitches && typeof body.platformSwitches === "object") {
       for (const [platform, enabled] of Object.entries(body.platformSwitches as Record<string, boolean>)) {
+        state.platformSwitches[platform] = enabled;
         setPlatformRealPublishEnabled(platform as PlatformId, enabled);
       }
+    }
+
+    const json = JSON.stringify(state);
+    const existing = repository.getPost("safety_config");
+    if (existing) {
+      existing.body = [{ type: "paragraph", text: json }];
+      repository.updatePost(existing);
+    } else {
+      repository.createPost({ id: "safety_config", title: "Safety Config", body: [{ type: "paragraph", text: json }], assets: [], tags: [], contentType: "article", createdAt: Date.now(), updatedAt: Date.now() });
     }
     return { ok: true };
   });
@@ -753,6 +780,37 @@ export function createApp(repository: FlashPromoterRepository) {
     } catch { return reply.code(500).send({ error: "删除失败" }); }
   });
 
+  // === AI Image Generation ===
+  app.post("/api/ai/generate-image", async (request, reply) => {
+    const body = request.body as { prompt: string; n?: number; size?: string };
+    const existing = repository.getPost(llmConfigKey);
+    if (!existing) return reply.code(400).send({ error: "请先在设置中配置 LLM" });
+    const config = JSON.parse((existing.body[0] as { text?: string }).text ?? "{}") as LlmConfig & { imageBaseUrl?: string; imageApiKey?: string; imageModel?: string };
+    if (!config.enabled || !config.apiKeyEncrypted || !config.capabilities?.image) {
+      return reply.code(400).send({ error: "当前模型不支持图片生成，请在设置中启用图片能力" });
+    }
+    const baseUrl = config.imageBaseUrl || config.baseUrl;
+    const apiKey = config.imageApiKey || config.apiKeyEncrypted;
+    const model = config.imageModel || "dall-e-3";
+    try {
+      const res = await fetch(`${baseUrl}/images/generations`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
+        body: JSON.stringify({ model, prompt: body.prompt ?? "illustration", n: body.n ?? 1, size: body.size ?? "1024x1024" }),
+        signal: AbortSignal.timeout(config.timeoutMs)
+      });
+      if (!res.ok) {
+        const err = await res.text().catch(() => "");
+        return reply.code(400).send({ error: `图片生成失败: ${err.slice(0, 200)}` });
+      }
+      const data = await res.json() as { data: Array<{ url?: string; b64_json?: string }> };
+      const images = data.data?.map((img) => ({ url: img.url, b64Json: img.b64_json })) ?? [];
+      return { images };
+    } catch (error) {
+      return reply.code(500).send({ error: error instanceof Error ? error.message : "图片生成失败" });
+    }
+  });
+
   return app;
 }
 
@@ -768,14 +826,23 @@ function defaultModeForPlatform(platform: PlatformId): PublishMode {
   return defaultPublishMode[platform as keyof typeof defaultPublishMode];
 }
 
-function accountFor(platform: PlatformId): PlatformAccount {
+function accountFor(platform: PlatformId, credStore: FlashPromoterRepository): PlatformAccount {
   const timestamp = Date.now();
+  let credentials = "";
+  try {
+    const credPost = credStore.getPost("platform_credentials");
+    if (credPost) {
+      const accounts = JSON.parse((credPost.body[0] as { text?: string }).text ?? "[]") as Array<Record<string, unknown>>;
+      const match = accounts.find((a) => a.platform === platform);
+      if (match?.credentials) credentials = JSON.stringify(match.credentials);
+    }
+  } catch {}
   return {
     id: `local-${platform}`,
     platform,
-    displayName: "local-mvp",
-    authType: platform === "mock" ? "mock" : "none",
-    encryptedCredentials: "",
+    displayName: platform,
+    authType: platform === "mock" ? "mock" : platform === "wordpress" ? "app-secret" : platform === "wechat" ? "app-secret" : "none",
+    encryptedCredentials: credentials,
     scopes: [],
     status: "active",
     createdAt: timestamp,

@@ -83,3 +83,15 @@ CREATE INDEX IF NOT EXISTS idx_publish_jobs_post_platform ON publish_jobs(post_i
 CREATE INDEX IF NOT EXISTS idx_publish_logs_job_id ON publish_logs(job_id);
 CREATE INDEX IF NOT EXISTS idx_accounts_platform ON accounts(platform);
 `;
+
+export const migrationSql = `
+ALTER TABLE publish_jobs ADD COLUMN draft_id TEXT;
+ALTER TABLE publish_jobs ADD COLUMN account_id TEXT;
+ALTER TABLE publish_jobs ADD COLUMN level TEXT;
+ALTER TABLE publish_jobs ADD COLUMN external_id TEXT;
+ALTER TABLE publish_jobs ADD COLUMN external_url TEXT;
+ALTER TABLE publish_jobs ADD COLUMN review_status TEXT;
+ALTER TABLE publish_jobs ADD COLUMN error_code TEXT;
+ALTER TABLE assets ADD COLUMN data_url TEXT;
+ALTER TABLE assets ADD COLUMN filename TEXT;
+`;
