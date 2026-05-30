@@ -18,8 +18,8 @@ export function StepValidatePublish(props: Props) {
     <div className="step-panel">
       <h2>校验并发布</h2>
       <p className="step-desc">
-        以下为各平台校验结果。确保所有平台通过校验后，点击"模拟发布"执行发布。
-        <br /><small className="muted">本次为模拟发布，不会调用真实平台接口。</small>
+        以下为各平台校验结果。通过校验后点击"发布"执行发布。
+        <br /><small className="muted">已配置凭证并开启安全的平台将执行真实发布，其余平台模拟发布。</small>
       </p>
 
       <div className="validate-grid">

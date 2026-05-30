@@ -93,6 +93,18 @@ const updateDraftSchema = z.object({
 });
 
 export function createApp(repository: FlashPromoterRepository) {
+  // Restore persisted safety state on startup
+  try {
+    const sp = repository.getPost("safety_config");
+    if (sp) {
+      const state = JSON.parse((sp.body[0] as { text?: string }).text ?? "{}") as { realPublishEnabled: boolean; platformSwitches: Record<string, boolean> };
+      setRealPublishEnabled(state.realPublishEnabled);
+      for (const [platform, enabled] of Object.entries(state.platformSwitches ?? {})) {
+        setPlatformRealPublishEnabled(platform as PlatformId, enabled);
+      }
+    }
+  } catch {}
+
   const app = Fastify({ logger: true });
 
   app.register(cors, {
@@ -665,37 +677,52 @@ export function createApp(repository: FlashPromoterRepository) {
 
   // === Safety / Real Publish ===
   app.get("/api/settings/safety", async () => {
+    // Load persisted state
+    let persisted = { realPublishEnabled: false, platformSwitches: {} as Record<string, boolean> };
+    try {
+      const sp = repository.getPost("safety_config");
+      if (sp) persisted = JSON.parse((sp.body[0] as { text?: string }).text ?? "{}") as typeof persisted;
+    } catch {}
     const switches: Record<string, boolean> = {};
     for (const manifest of Object.values(platformManifests)) {
-      switches[manifest.id] = isPlatformRealPublishEnabled(manifest.id) && manifest.publishLevels.some((l) => l === "submit" || l === "publish");
+      switches[manifest.id] = (persisted.platformSwitches[manifest.id] ?? false) && manifest.publishLevels.some((l) => l === "submit" || l === "publish");
     }
     return {
-      realPublishEnabled: isRealPublishEnabled(),
+      realPublishEnabled: persisted.realPublishEnabled,
       platformSwitches: switches,
       platformGuides: Object.values(platformManifests).filter((m) => m.id !== "mock").map((m) => ({
-        id: m.id,
-        name: m.name,
-        authType: m.auth.type,
-        setupNote: m.auth.note ?? "",
-        setupUrl: m.auth.setupUrl ?? "",
-        docs: m.docs ?? [],
-        publishLevels: m.publishLevels,
-        riskLevel: m.riskLevel,
-        defaultMode: m.defaultMode,
-        supportedContentTypes: m.supportedContentTypes
+        id: m.id, name: m.name, authType: m.auth.type, setupNote: m.auth.note ?? "", setupUrl: m.auth.setupUrl ?? "",
+        docs: m.docs ?? [], publishLevels: m.publishLevels, riskLevel: m.riskLevel, defaultMode: m.defaultMode, supportedContentTypes: m.supportedContentTypes
       }))
     };
   });
 
   app.post("/api/settings/safety", async (request, reply) => {
     const body = request.body as Record<string, unknown>;
+    let state = { realPublishEnabled: false, platformSwitches: {} as Record<string, boolean> };
+    try {
+      const sp = repository.getPost("safety_config");
+      if (sp) state = JSON.parse((sp.body[0] as { text?: string }).text ?? "{}") as typeof state;
+    } catch {}
+
     if (typeof body.realPublishEnabled === "boolean") {
+      state.realPublishEnabled = body.realPublishEnabled;
       setRealPublishEnabled(body.realPublishEnabled);
     }
     if (body.platformSwitches && typeof body.platformSwitches === "object") {
       for (const [platform, enabled] of Object.entries(body.platformSwitches as Record<string, boolean>)) {
+        state.platformSwitches[platform] = enabled;
         setPlatformRealPublishEnabled(platform as PlatformId, enabled);
       }
+    }
+
+    const json = JSON.stringify(state);
+    const existing = repository.getPost("safety_config");
+    if (existing) {
+      existing.body = [{ type: "paragraph", text: json }];
+      repository.updatePost(existing);
+    } else {
+      repository.createPost({ id: "safety_config", title: "Safety Config", body: [{ type: "paragraph", text: json }], assets: [], tags: [], contentType: "article", createdAt: Date.now(), updatedAt: Date.now() });
     }
     return { ok: true };
   });
