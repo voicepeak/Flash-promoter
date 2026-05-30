@@ -69,17 +69,20 @@ export function SettingsPage() {
 
   // LLM
   const [llmForm, setLlmForm] = useState({ enabled: false, baseUrl: "https://api.openai.com/v1", apiKeyEncrypted: "", model: "gpt-4o", temperature: 0.7, timeoutMs: 30000, maxTokens: 4096, imageBaseUrl: "", imageApiKey: "", imageModel: "dall-e-3", capabilities: { text: true, image: false, videoFrame: false, structuredOutput: true, longContext: true } as LlmModelCapabilities });
+  const [hasStoredKey, setHasStoredKey] = useState(false);
+  const [hasStoredImageKey, setHasStoredImageKey] = useState(false);
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<"ok" | "fail" | null>(null);
   const [savingLlm, setSavingLlm] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   useEffect(() => {
-    api.getLlmConfig().then((r) => { if (r.config.baseUrl) setLlmForm({ enabled: r.config.enabled, baseUrl: r.config.baseUrl, apiKeyEncrypted: r.config.apiKeyEncrypted, model: r.config.model, temperature: r.config.temperature, timeoutMs: r.config.timeoutMs, maxTokens: r.config.maxTokens ?? 4096, imageBaseUrl: (r.config as Record<string, unknown>).imageBaseUrl as string ?? "", imageApiKey: (r.config as Record<string, unknown>).imageApiKey as string ?? "", imageModel: (r.config as Record<string, unknown>).imageModel as string ?? "dall-e-3", capabilities: r.config.capabilities }); }).catch(() => {});
+    api.getLlmConfig().then((r) => { if (r.config.baseUrl) { const keyFromServer = r.config.apiKeyEncrypted ?? ""; const imgKeyFromServer = (r.config as Record<string, unknown>).imageApiKey as string ?? ""; setHasStoredKey(!!keyFromServer); setHasStoredImageKey(!!imgKeyFromServer); setLlmForm({ enabled: r.config.enabled, baseUrl: r.config.baseUrl, apiKeyEncrypted: "", model: r.config.model, temperature: r.config.temperature, timeoutMs: r.config.timeoutMs, maxTokens: r.config.maxTokens ?? 4096, imageBaseUrl: (r.config as Record<string, unknown>).imageBaseUrl as string ?? "", imageApiKey: "", imageModel: (r.config as Record<string, unknown>).imageModel as string ?? "dall-e-3", capabilities: r.config.capabilities }); } }).catch(() => {});
     api.getSafety().then((r) => { setGlobalSafety(r.realPublishEnabled); setPlatformSwitches(r.platformSwitches); setGuides(r.platformGuides.filter((g) => p0Platforms.includes(g.id as PlatformId))); }).catch(() => {});
     api.getPlatformAccounts().then((r) => setAccounts(r.accounts)).catch(() => {});
   }, []);
 
-  async function saveLlm() { setSavingLlm(true); try { await api.saveLlmConfig(llmForm); setTestResult(null); } catch {} finally { setSavingLlm(false); } }
+  async function saveLlm() { setSavingLlm(true); setSaveError(null); try { await api.saveLlmConfig(llmForm); setTestResult(null); if (llmForm.apiKeyEncrypted) setHasStoredKey(true); if (llmForm.imageApiKey) setHasStoredImageKey(true); } catch (e) { setSaveError(e instanceof Error ? e.message : "保存失败"); } finally { setSavingLlm(false); } }
   async function testLlm() { setTesting(true); setTestResult(null); try { const r = await api.testLlm(llmForm); setTestResult(r.ok ? "ok" : "fail"); } catch { setTestResult("fail"); } finally { setTesting(false); } }
   async function toggleGlobal(enabled: boolean) { setGlobalSafety(enabled); try { await api.saveSafety({ realPublishEnabled: enabled }); } catch {} }
   async function togglePlatform(platform: string, enabled: boolean) { const next = { ...platformSwitches, [platform]: enabled }; setPlatformSwitches(next); try { await api.saveSafety({ platformSwitches: next }); } catch {} }
@@ -215,7 +218,7 @@ export function SettingsPage() {
         <div className="settings-table">
           <div className="settings-row"><span>启用 AI 辅助</span><label className="toggle-label"><input type="checkbox" checked={llmForm.enabled} onChange={(e) => setLlmForm({ ...llmForm, enabled: e.target.checked })} /><span className={`toggle-switch ${llmForm.enabled ? "on" : ""}`} /></label></div>
           <div className="settings-row"><span>Base URL</span><input className="settings-input" value={llmForm.baseUrl} onChange={(e) => setLlmForm({ ...llmForm, baseUrl: e.target.value })} /></div>
-          <div className="settings-row"><span>API Key</span><input className="settings-input" type="password" value={llmForm.apiKeyEncrypted} onChange={(e) => setLlmForm({ ...llmForm, apiKeyEncrypted: e.target.value })} /></div>
+          <div className="settings-row"><span>API Key</span><span style={{ display: "flex", gap: 8, alignItems: "center", flex: 1 }}><input className="settings-input" type="password" value={llmForm.apiKeyEncrypted} onChange={(e) => setLlmForm({ ...llmForm, apiKeyEncrypted: e.target.value })} placeholder={hasStoredKey ? "已保存，留空不修改" : "输入 API Key"} style={{ flex: 1 }} />{hasStoredKey ? <span style={{ color: "#0e7c66", fontSize: 12, whiteSpace: "nowrap" }}>已保存</span> : null}</span></div>
           <div className="settings-row"><span>Model</span><input className="settings-input" value={llmForm.model} onChange={(e) => setLlmForm({ ...llmForm, model: e.target.value })} /></div>
           <div className="settings-row"><span>Temperature</span><input className="settings-input" type="number" min="0" max="2" step="0.1" value={llmForm.temperature} onChange={(e) => setLlmForm({ ...llmForm, temperature: Number(e.target.value) })} /></div>
           <div className="settings-row"><span>Timeout (ms)</span><input className="settings-input" type="number" value={llmForm.timeoutMs} onChange={(e) => setLlmForm({ ...llmForm, timeoutMs: Number(e.target.value) })} /></div>
@@ -225,13 +228,14 @@ export function SettingsPage() {
             <span style={{ fontWeight: 600 }}>🎨 AI 生图配置</span>
           </div>
           <div className="settings-row"><span>生图 API URL</span><input className="settings-input" value={llmForm.imageBaseUrl} onChange={(e) => setLlmForm({ ...llmForm, imageBaseUrl: e.target.value })} placeholder="留空则复用 Base URL" /></div>
-          <div className="settings-row"><span>生图 API Key</span><input className="settings-input" type="password" value={llmForm.imageApiKey} onChange={(e) => setLlmForm({ ...llmForm, imageApiKey: e.target.value })} placeholder="留空则复用主 API Key" /></div>
+          <div className="settings-row"><span>生图 API Key</span><span style={{ display: "flex", gap: 8, alignItems: "center", flex: 1 }}><input className="settings-input" type="password" value={llmForm.imageApiKey} onChange={(e) => setLlmForm({ ...llmForm, imageApiKey: e.target.value })} placeholder={hasStoredImageKey ? "已保存，留空不修改" : "留空则复用主 API Key"} style={{ flex: 1 }} />{hasStoredImageKey ? <span style={{ color: "#0e7c66", fontSize: 12, whiteSpace: "nowrap" }}>已保存</span> : null}</span></div>
           <div className="settings-row"><span>生图 Model</span><input className="settings-input" value={llmForm.imageModel} onChange={(e) => setLlmForm({ ...llmForm, imageModel: e.target.value })} placeholder="dall-e-3" /></div>
         </div>
         <div style={{ display: "flex", gap: 10, marginTop: 14, alignItems: "center" }}>
           <button type="button" className="primary-button" disabled={savingLlm} onClick={saveLlm}>{savingLlm ? "保存中…" : "保存配置"}</button>
           <button type="button" disabled={testing} onClick={testLlm}>{testing ? <Loader2 size={14} className="spinner" /> : "测试连接"}</button>
           {testResult === "ok" ? <span style={{ color: "#0e7c66", display: "flex", alignItems: "center", gap: 4 }}><CheckCircle2 size={14} /> 连接成功</span> : testResult === "fail" ? <span style={{ color: "#b13b2e", display: "flex", alignItems: "center", gap: 4 }}><X size={14} /> 连接失败</span> : null}
+          {saveError ? <span style={{ color: "#b13b2e", display: "flex", alignItems: "center", gap: 4 }}><X size={14} /> {saveError}</span> : null}
         </div>
       </section>
 

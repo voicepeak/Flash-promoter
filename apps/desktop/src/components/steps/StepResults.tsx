@@ -67,6 +67,9 @@ export function StepResults(props: Props) {
               </div>
               <p className="result-title">{draft.title}</p>
               {result?.message && <p className="result-msg">{result.message}</p>}
+              {result?.url && draft.platform === "wechat" && (
+                <a href={result.url} target="_blank" rel="noopener noreferrer" className="result-msg" style={{ color: "var(--primary)", display: "flex", alignItems: "center", gap: 4, marginTop: 4 }}><ExternalLink size={14} /> 前往公众号后台发布草稿</a>
+              )}
               {result?.errorMessage && (
                 <div className="result-error-block">
                   <p className="result-msg err">{result.errorMessage}</p>

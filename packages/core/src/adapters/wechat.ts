@@ -32,14 +32,13 @@ async function callWechatApi(accessToken: string, path: string, method: string, 
   }
 }
 
-async function uploadWechatImage(accessToken: string, asset: Asset): Promise<{ mediaId: string } | { error: string }> {
+async function uploadWechatImage(accessToken: string, asset: Asset): Promise<{ mediaId: string; url: string } | { error: string }> {
   try {
     let buffer: Buffer;
-    const filename = asset.filename ?? "cover.png";
+    const filename = asset.filename ?? "image.png";
     const mime = asset.mimeType ?? "image/png";
 
     if (asset.dataUrl) {
-      // Handle data URL: data:image/png;base64,xxxx
       const match = asset.dataUrl.match(/^data:[^;]+;base64,(.+)$/);
       if (match) {
         buffer = Buffer.from(match[1], "base64");
@@ -55,7 +54,6 @@ async function uploadWechatImage(accessToken: string, asset: Asset): Promise<{ m
       return { error: "图片无可用数据源" };
     }
 
-    // Upload as multipart form
     const boundary = `----FormBoundary${Date.now()}`;
     const header = `--${boundary}\r\nContent-Disposition: form-data; name="media"; filename="${filename}"\r\nContent-Type: ${mime}\r\n\r\n`;
     const footer = `\r\n--${boundary}--\r\n`;
@@ -68,7 +66,7 @@ async function uploadWechatImage(accessToken: string, asset: Asset): Promise<{ m
       signal: AbortSignal.timeout(20000)
     });
     const data = await res.json() as Record<string, unknown>;
-    if (data.media_id) return { mediaId: data.media_id as string };
+    if (data.media_id) return { mediaId: data.media_id as string, url: (data.url as string) ?? "" };
     const err = String(data.errmsg ?? JSON.stringify(data));
     return { error: `素材上传失败: ${err}` };
   } catch (e) {
@@ -99,13 +97,33 @@ function parseCred(account: PlatformAccount): Record<string, string> | null {
   try { return account.encryptedCredentials ? JSON.parse(account.encryptedCredentials) as Record<string, string> : null; } catch { return null; }
 }
 
-function bodyToHtml(draft: PlatformDraft): string {
-  const text = typeof draft.body === "string" ? draft.body : draft.body.map((b) => ("text" in b ? b.text : "")).join("\n\n");
-  return `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>${draft.title}</title></head><body>${text.replace(/\n/g, "<br>")}</body></html>`;
+function bodyToHtml(draft: PlatformDraft, imageUrls: Map<string, string>): string {
+  let html = "";
+  if (typeof draft.body === "string") {
+    html = draft.body.replace(/\n/g, "<br>");
+  } else {
+    const parts: string[] = [];
+    for (const b of draft.body) {
+      if (b.type === "image") {
+        const url = imageUrls.get(b.assetId);
+        if (url) {
+          parts.push(`<img src="${url}"${b.caption ? ` alt="${b.caption}"` : ""} />`);
+        }
+      } else if (b.type === "divider") {
+        parts.push("<hr>");
+      } else if ("text" in b) {
+        parts.push(b.text);
+      } else if (b.type === "code") {
+        parts.push(`<pre><code>${b.code}</code></pre>`);
+      }
+    }
+    html = parts.join("\n");
+  }
+  return `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>${draft.title}</title></head><body>${html.replace(/\n/g, "<br>")}</body></html>`;
 }
 
-function findImageAsset(draft: PlatformDraft): Asset | null {
-  return draft.assets?.find((a) => a.type === "image" && (a.dataUrl || a.localPath)) ?? null;
+function findImageAssets(draft: PlatformDraft): Asset[] {
+  return (draft.assets ?? []).filter((a) => a.type === "image" && (a.dataUrl || a.localPath));
 }
 
 export const wechatAdapter: PlatformAdapter = {
@@ -145,29 +163,32 @@ export const wechatAdapter: PlatformAdapter = {
     if ("error" in tokenResult) return { platform: "wechat", mode, status: "failed", errorMessage: tokenResult.error, createdAt: now() };
     const token = tokenResult.token;
 
-    // Upload cover image if available
+    // Upload ALL image assets to WeChat, collect URLs for inline images
+    const imageAssets = findImageAssets(draft);
+    const imageUrls = new Map<string, string>();
     let thumbMediaId = "";
-    let coverError = "";
-    const imageAsset = findImageAsset(draft);
-    if (imageAsset) {
-      const uploadResult = await uploadWechatImage(token, imageAsset);
-      if ("mediaId" in uploadResult) {
-        thumbMediaId = uploadResult.mediaId;
+    const uploadErrors: string[] = [];
+
+    for (const asset of imageAssets) {
+      const result = await uploadWechatImage(token, asset);
+      if ("mediaId" in result) {
+        if (!thumbMediaId) thumbMediaId = result.mediaId;
+        if (result.url) imageUrls.set(asset.id, result.url);
       } else {
-        coverError = uploadResult.error;
+        uploadErrors.push(result.error);
       }
     }
 
-    // Fallback: generate a valid 300x250 PNG cover
+    // Fallback: generate a valid 300x250 PNG cover if no image uploaded
     if (!thumbMediaId) {
       const png = await generateCoverPng();
       const b64 = png.toString("base64");
-      const result = await uploadWechatImage(token, { id: "fallback", type: "image", dataUrl: `data:image/png;base64,${b64}`, filename: "cover.png", mimeType: "image/png", createdAt: Date.now(), updatedAt: Date.now(), size: png.length } as Asset);
-      if ("mediaId" in result) thumbMediaId = result.mediaId;
+      const fallback = await uploadWechatImage(token, { id: "fallback", type: "image", dataUrl: `data:image/png;base64,${b64}`, filename: "cover.png", mimeType: "image/png", createdAt: Date.now(), updatedAt: Date.now(), size: png.length } as Asset);
+      if ("mediaId" in fallback) thumbMediaId = fallback.mediaId;
     }
 
-    // Build draft
-    const content = bodyToHtml(draft);
+    // Build draft HTML with inline image URLs
+    const content = bodyToHtml(draft, imageUrls);
     const article: Record<string, unknown> = {
       title: draft.title,
       content,
@@ -180,11 +201,19 @@ export const wechatAdapter: PlatformAdapter = {
 
     const res = await callWechatApi(token, "/draft/add", "POST", { articles: [article] });
     if (res.ok) {
+      const imageCount = imageUrls.size;
+      const coverOk = !!thumbMediaId;
+      let msg = "公众号草稿已创建";
+      if (coverOk && imageCount > 0) msg += `（含封面 + ${imageCount} 张配图）`;
+      else if (coverOk) msg += "（含封面图）";
+      else if (imageCount > 0) msg += `（含 ${imageCount} 张配图，无封面）`;
+      if (uploadErrors.length) msg += ` | 上传错误: ${uploadErrors.join("; ")}`;
       return {
         platform: "wechat", mode, status: "draft_created",
         externalId: String((res.data as Record<string, unknown>)?.media_id ?? createId("wechat_media")),
-        message: thumbMediaId ? "公众号草稿已创建（含封面图）" : coverError ? `草稿已创建，但封面图上传失败: ${coverError}` : "公众号草稿已创建（无封面图）",
-        raw: { realApiCalled: true, result: res.data, thumbMediaId, coverError },
+        url: "https://mp.weixin.qq.com/",
+        message: msg,
+        raw: { realApiCalled: true, result: res.data, thumbMediaId, imageCount, uploadErrors },
         createdAt: now()
       };
     }

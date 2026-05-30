@@ -105,7 +105,7 @@ export function createApp(repository: FlashPromoterRepository) {
     }
   } catch {}
 
-  const app = Fastify({ logger: true });
+  const app = Fastify({ logger: true, bodyLimit: 50 * 1024 * 1024 });
 
   app.register(cors, {
     origin: true
@@ -229,7 +229,7 @@ export function createApp(repository: FlashPromoterRepository) {
             currentValue: prompt, slotKey: platform, fieldLabel: platform,
             inputContext: { title: post.title, body, summary: post.summary, tags: post.tags }
           });
-          const draft = parsePlatformDraft(platform, post.id, post.title, body, post.summary ?? "", post.tags, res.candidates[0] ?? "");
+          const draft = parsePlatformDraft(platform, post.id, post.title, body, post.summary ?? "", post.tags, res.candidates[0] ?? "", post.assets);
           drafts.push(draft);
         } catch {
           const fallback = await generatePlatformDrafts(post, [platform], { style: "balanced" });
@@ -303,7 +303,7 @@ export function createApp(repository: FlashPromoterRepository) {
             currentValue: prompt, slotKey: platform, fieldLabel: platform,
             inputContext: { title: input.title, body, summary: input.summary, tags: input.tags, topic: input.topic }
           });
-          const draft = parsePlatformDraft(platform, post.id, input.title, body, input.summary ?? "", input.tags, res.candidates[0] ?? "");
+          const draft = parsePlatformDraft(platform, post.id, input.title, body, input.summary ?? "", input.tags, res.candidates[0] ?? "", post.assets);
           drafts.push(draft);
         } catch {
           const fallback = generateVideoPlatformAdaptation(input, [platform]);
@@ -613,11 +613,18 @@ export function createApp(repository: FlashPromoterRepository) {
 
   app.post("/api/settings/llm", async (request, reply) => {
     const body = request.body as Record<string, unknown>;
+    const incomingKey = String(body.apiKeyEncrypted ?? "");
+    const existing = repository.getPost(llmConfigKey);
+    const storedKey = existing
+      ? (JSON.parse((existing.body?.[0] as { text?: string } | undefined)?.text ?? "{}") as LlmConfig).apiKeyEncrypted ?? ""
+      : "";
+    // If the client sent a masked key (contains ****) or empty, keep the real stored key
+    const keyToSave = (incomingKey && !incomingKey.includes("****")) ? incomingKey : storedKey;
     const config = createLlmConfig({
       enabled: Boolean(body.enabled),
       provider: String(body.provider ?? "openai-compatible"),
       baseUrl: String(body.baseUrl ?? ""),
-      apiKeyEncrypted: String(body.apiKeyEncrypted ?? ""),
+      apiKeyEncrypted: keyToSave,
       model: String(body.model ?? "gpt-4o"),
       temperature: Number(body.temperature ?? 0.7),
       timeoutMs: Number(body.timeoutMs ?? 30000),
@@ -625,7 +632,6 @@ export function createApp(repository: FlashPromoterRepository) {
       capabilities: (body.capabilities as LlmConfig["capabilities"]) ?? { text: true, image: false, videoFrame: false, structuredOutput: true, longContext: true },
       updatedAt: Date.now()
     });
-    const existing = repository.getPost(llmConfigKey);
     if (existing) {
       existing.body = [{ type: "paragraph", text: JSON.stringify(config) }];
       repository.updatePost(existing);
