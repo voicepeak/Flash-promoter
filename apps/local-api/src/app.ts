@@ -785,16 +785,17 @@ export function createApp(repository: FlashPromoterRepository) {
     const body = request.body as { prompt: string; n?: number; size?: string };
     const existing = repository.getPost(llmConfigKey);
     if (!existing) return reply.code(400).send({ error: "请先在设置中配置 LLM" });
-    const config = JSON.parse((existing.body[0] as { text?: string }).text ?? "{}") as LlmConfig & { imageBaseUrl?: string; imageModel?: string };
+    const config = JSON.parse((existing.body[0] as { text?: string }).text ?? "{}") as LlmConfig & { imageBaseUrl?: string; imageApiKey?: string; imageModel?: string };
     if (!config.enabled || !config.apiKeyEncrypted || !config.capabilities?.image) {
       return reply.code(400).send({ error: "当前模型不支持图片生成，请在设置中启用图片能力" });
     }
     const baseUrl = config.imageBaseUrl || config.baseUrl;
+    const apiKey = config.imageApiKey || config.apiKeyEncrypted;
     const model = config.imageModel || "dall-e-3";
     try {
       const res = await fetch(`${baseUrl}/images/generations`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${config.apiKeyEncrypted}` },
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
         body: JSON.stringify({ model, prompt: body.prompt ?? "illustration", n: body.n ?? 1, size: body.size ?? "1024x1024" }),
         signal: AbortSignal.timeout(config.timeoutMs)
       });

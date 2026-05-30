@@ -68,13 +68,13 @@ export function SettingsPage() {
   const [savingCred, setSavingCred] = useState<string | null>(null);
 
   // LLM
-  const [llmForm, setLlmForm] = useState({ enabled: false, baseUrl: "https://api.openai.com/v1", apiKeyEncrypted: "", model: "gpt-4o", temperature: 0.7, timeoutMs: 30000, maxTokens: 4096, imageBaseUrl: "", imageModel: "dall-e-3", capabilities: { text: true, image: false, videoFrame: false, structuredOutput: true, longContext: true } as LlmModelCapabilities });
+  const [llmForm, setLlmForm] = useState({ enabled: false, baseUrl: "https://api.openai.com/v1", apiKeyEncrypted: "", model: "gpt-4o", temperature: 0.7, timeoutMs: 30000, maxTokens: 4096, imageBaseUrl: "", imageApiKey: "", imageModel: "dall-e-3", capabilities: { text: true, image: false, videoFrame: false, structuredOutput: true, longContext: true } as LlmModelCapabilities });
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<"ok" | "fail" | null>(null);
   const [savingLlm, setSavingLlm] = useState(false);
 
   useEffect(() => {
-    api.getLlmConfig().then((r) => { if (r.config.baseUrl) setLlmForm({ enabled: r.config.enabled, baseUrl: r.config.baseUrl, apiKeyEncrypted: r.config.apiKeyEncrypted, model: r.config.model, temperature: r.config.temperature, timeoutMs: r.config.timeoutMs, maxTokens: r.config.maxTokens ?? 4096, imageBaseUrl: (r.config as Record<string, unknown>).imageBaseUrl as string ?? "", imageModel: (r.config as Record<string, unknown>).imageModel as string ?? "dall-e-3", capabilities: r.config.capabilities }); }).catch(() => {});
+    api.getLlmConfig().then((r) => { if (r.config.baseUrl) setLlmForm({ enabled: r.config.enabled, baseUrl: r.config.baseUrl, apiKeyEncrypted: r.config.apiKeyEncrypted, model: r.config.model, temperature: r.config.temperature, timeoutMs: r.config.timeoutMs, maxTokens: r.config.maxTokens ?? 4096, imageBaseUrl: (r.config as Record<string, unknown>).imageBaseUrl as string ?? "", imageApiKey: (r.config as Record<string, unknown>).imageApiKey as string ?? "", imageModel: (r.config as Record<string, unknown>).imageModel as string ?? "dall-e-3", capabilities: r.config.capabilities }); }).catch(() => {});
     api.getSafety().then((r) => { setGlobalSafety(r.realPublishEnabled); setPlatformSwitches(r.platformSwitches); setGuides(r.platformGuides.filter((g) => p0Platforms.includes(g.id as PlatformId))); }).catch(() => {});
     api.getPlatformAccounts().then((r) => setAccounts(r.accounts)).catch(() => {});
   }, []);
@@ -225,8 +225,8 @@ export function SettingsPage() {
             <span style={{ fontWeight: 600 }}>🎨 AI 生图配置</span>
           </div>
           <div className="settings-row"><span>生图 API URL</span><input className="settings-input" value={llmForm.imageBaseUrl} onChange={(e) => setLlmForm({ ...llmForm, imageBaseUrl: e.target.value })} placeholder="留空则复用 Base URL" /></div>
-          <div className="settings-row"><span>生图 Model</span><input className="settings-input" value={llmForm.imageModel} onChange={(e) => setLlmForm({ ...llmForm, imageModel: e.target.value })} placeholder="dall-e-3" />
-          </div>
+          <div className="settings-row"><span>生图 API Key</span><input className="settings-input" type="password" value={llmForm.imageApiKey} onChange={(e) => setLlmForm({ ...llmForm, imageApiKey: e.target.value })} placeholder="留空则复用主 API Key" /></div>
+          <div className="settings-row"><span>生图 Model</span><input className="settings-input" value={llmForm.imageModel} onChange={(e) => setLlmForm({ ...llmForm, imageModel: e.target.value })} placeholder="dall-e-3" /></div>
         </div>
         <div style={{ display: "flex", gap: 10, marginTop: 14, alignItems: "center" }}>
           <button type="button" className="primary-button" disabled={savingLlm} onClick={saveLlm}>{savingLlm ? "保存中…" : "保存配置"}</button>
