@@ -33,18 +33,26 @@ export function ArticleFlowWizard() {
   async function handleGenerate() {
     setStep(2); setBusy(true); setMessage(null);
     try {
-      // Use LLM to analyze body and extract title/summary/tags, then generate
-      let title = ""; let summary = ""; let tags: string[] = [];
+      // Try LLM analysis if configured, fall back to plain text
+      let title = body.slice(0, 30);
+      let summary = "";
+      let tags: string[] = [];
+      let llmAvailable = false;
       try {
-        const analysis = await api.aiAction({
-          contentId: "input-stage", action: "analyzeContent", contentType: "article",
-          currentValue: body, slotKey: "body", fieldLabel: "分析", inputContext: {}
-        });
-        const json = tryParse(analysis.candidates[0] ?? "");
-        title = String(json?.title ?? body.slice(0, 30));
-        summary = String(json?.summary ?? "");
-        tags = Array.isArray(json?.tags) ? json.tags.map(String) : [];
-      } catch { title = body.slice(0, 30); }
+        const cfg = await api.getLlmConfig();
+        llmAvailable = !!(cfg?.config?.enabled && cfg?.config?.apiKeyEncrypted);
+      } catch { llmAvailable = false; }
+
+      if (llmAvailable) {
+        try {
+          const analysis = await api.aiAction({
+            contentId: "input-stage", action: "analyzeContent", contentType: "article",
+            currentValue: body, slotKey: "body", fieldLabel: "分析", inputContext: {}
+          });
+          const json = tryParse(analysis.candidates[0] ?? "");
+          if (json) { title = String(json.title ?? title); summary = String(json.summary ?? ""); tags = Array.isArray(json.tags) ? json.tags.map(String) : []; }
+        } catch { /* LLM unavailable, use plain title */ }
+      }
 
       const imgAssets = images.map((img) => ({ id: img.id, type: "image" as const, dataUrl: img.dataUrl, filename: img.filename, mimeType: "image/png", createdAt: Date.now(), updatedAt: Date.now() }));
       const created = await api.createPost({ title, body, summary, tags, inputFormat: "markdown", assets: imgAssets });
@@ -53,7 +61,7 @@ export function ArticleFlowWizard() {
       setDrafts(generated.items);
       setStep(3); showMessage("平台内容包已生成");
     } catch (error) {
-      setStep(1); setMessage(error instanceof Error ? error.message : "生成失败");
+      setStep(1); setMessage(error instanceof Error ? error.message : "生成失败，请确认 API 服务已启动");
     } finally { setBusy(false); }
   }
 
