@@ -1612,3 +1612,73 @@ textarea,
 .capability-tags { display: flex; gap: 8px; }
 .cap-tag { display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px; border: 1px solid var(--line); border-radius: 999px; font-size: 12px; cursor: pointer; background: #fffaf0; }
 .cap-tag input { margin: 0; }
+
+/* ===== Platform Management Cards ===== */
+.platform-mgmt-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.platform-mgmt-card {
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #fffdf8;
+}
+
+.pmc-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
+}
+
+.pmc-top strong {
+  font-size: 15px;
+}
+
+.pmc-level {
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  background: #ece4d5;
+  color: var(--muted);
+}
+
+.pmc-level.lvl-draft { background: #e8f5e9; color: #2e7d32; }
+.pmc-level.lvl-assist { background: #fff3e0; color: #e65100; }
+.pmc-level.lvl-submit { background: #e3f2fd; color: #1565c0; }
+.pmc-level.lvl-publish { background: #fce4ec; color: #c62828; }
+
+.platform-mgmt-card p {
+  margin: 0 0 8px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.pmc-flags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.pmc-flag {
+  padding: 2px 7px;
+  border-radius: 999px;
+  font-size: 11px;
+  background: #eef7f3;
+  color: var(--accent-strong);
+}
+
+.pmc-flag.warn {
+  background: #fff0ee;
+  color: var(--danger);
+}
+
+.pmc-flag.muted {
+  background: #f5f0e4;
+  color: var(--muted);
+}
