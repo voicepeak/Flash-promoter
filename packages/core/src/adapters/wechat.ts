@@ -24,7 +24,9 @@ async function callWechatApi(accessToken: string, path: string, method: string, 
       signal: AbortSignal.timeout(15000)
     });
     const data = await res.json().catch(() => null);
-    return { ok: (data as Record<string, unknown>)?.errcode === 0, status: res.status, data, error: data ? String((data as Record<string, unknown>).errmsg ?? "") : `HTTP ${res.status}` };
+    const errcode = (data as Record<string, unknown>)?.errcode;
+    const ok = errcode === undefined || errcode === 0 || errcode === null;
+    return { ok, status: res.status, data, error: ok ? undefined : String((data as Record<string, unknown>)?.errmsg ?? `HTTP ${res.status}`) };
   } catch (e) {
     return { ok: false, status: 0, error: e instanceof Error ? e.message : "连接失败" };
   }
@@ -137,10 +139,10 @@ export const wechatAdapter: PlatformAdapter = {
       }
     }
 
-    // Fallback: generate a minimal 1x1 white PNG as placeholder cover
+    // Fallback: 300x250 valid PNG as placeholder cover
     if (!thumbMediaId) {
-      const px = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPj/HwADBwIAMCbHYQAAAABJRU5ErkJggg==";
-      const result = await uploadWechatImage(token, { id: "default", type: "image", dataUrl: `data:image/png;base64,${px}`, filename: "placeholder.png", mimeType: "image/png", createdAt: Date.now(), updatedAt: Date.now(), size: 68 } as Asset);
+      const px = "iVBORw0KGgoAAAANSUhEUgAAASwAAAD6AQMAAAAho+iwAAAABlBMVEUAAAD///+l2Z/dAAAACXBIWXMAAA7EAAAOxAGVKw4bAAAAFklEQVRYw+3BAQ0AAADCoPdPbQ8HFAAAAHwGE0AAAZrFKsAAAAAASUVORK5CYII=";
+      const result = await uploadWechatImage(token, { id: "fallback", type: "image", dataUrl: `data:image/png;base64,${px}`, filename: "cover.png", mimeType: "image/png", createdAt: Date.now(), updatedAt: Date.now(), size: 2000 } as Asset);
       if ("mediaId" in result) thumbMediaId = result.mediaId;
     }
 
