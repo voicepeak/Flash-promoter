@@ -32,38 +32,43 @@ async function callWechatApi(accessToken: string, path: string, method: string, 
 
 async function uploadWechatImage(accessToken: string, asset: Asset): Promise<{ mediaId: string } | { error: string }> {
   try {
-    let buffer: ArrayBuffer;
+    let buffer: Buffer;
     const filename = asset.filename ?? "cover.png";
     const mime = asset.mimeType ?? "image/png";
 
     if (asset.dataUrl) {
-      const match = asset.dataUrl.match(/^data:([^;]+);base64,(.+)$/);
+      // Handle data URL: data:image/png;base64,xxxx
+      const match = asset.dataUrl.match(/^data:[^;]+;base64,(.+)$/);
       if (match) {
-        const binary = atob(match[2]);
-        const bytes = new Uint8Array(binary.length);
-        for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-        buffer = bytes.buffer;
+        buffer = Buffer.from(match[1], "base64");
+        if (buffer.length < 100) return { error: "图片数据过小，可能是空图或损坏" };
+        if (buffer.length > 2 * 1024 * 1024) return { error: "图片超过 2MB，微信素材上传上限为 2MB" };
       } else {
-        return { error: "图片 dataUrl 格式无效" };
+        return { error: "图片格式不支持，需要 JPG/PNG" };
       }
     } else if (asset.localPath) {
       const { readFileSync } = await import("node:fs");
-      const data = readFileSync(asset.localPath);
-      buffer = data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength);
+      buffer = readFileSync(asset.localPath);
     } else {
-      return { error: "图片无可用的数据源" };
+      return { error: "图片无可用数据源" };
     }
 
-    const formData = new FormData();
-    formData.append("media", new Blob([buffer], { type: mime }), filename);
+    // Upload as multipart form
+    const boundary = `----FormBoundary${Date.now()}`;
+    const header = `--${boundary}\r\nContent-Disposition: form-data; name="media"; filename="${filename}"\r\nContent-Type: ${mime}\r\n\r\n`;
+    const footer = `\r\n--${boundary}--\r\n`;
+    const body = Buffer.concat([Buffer.from(header, "utf-8"), buffer, Buffer.from(footer, "utf-8")]);
 
     const res = await fetch(`https://api.weixin.qq.com/cgi-bin/material/add_material?access_token=${accessToken}&type=image`, {
-      method: "POST", body: formData, signal: AbortSignal.timeout(20000)
+      method: "POST",
+      headers: { "Content-Type": `multipart/form-data; boundary=${boundary}` },
+      body,
+      signal: AbortSignal.timeout(20000)
     });
     const data = await res.json() as Record<string, unknown>;
     if (data.media_id) return { mediaId: data.media_id as string };
     const err = String(data.errmsg ?? JSON.stringify(data));
-    return { error: err.includes("invalid") ? `素材上传失败: ${err}。请确认图片格式为 JPG/PNG，大小不超过 2MB。` : `素材上传失败: ${err}` };
+    return { error: `素材上传失败: ${err}` };
   } catch (e) {
     return { error: e instanceof Error ? e.message : "素材上传请求失败" };
   }
@@ -130,6 +135,13 @@ export const wechatAdapter: PlatformAdapter = {
       } else {
         coverError = uploadResult.error;
       }
+    }
+
+    // Fallback: generate a minimal 1x1 white PNG as placeholder cover
+    if (!thumbMediaId) {
+      const px = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPj/HwADBwIAMCbHYQAAAABJRU5ErkJggg==";
+      const result = await uploadWechatImage(token, { id: "default", type: "image", dataUrl: `data:image/png;base64,${px}`, filename: "placeholder.png", mimeType: "image/png", createdAt: Date.now(), updatedAt: Date.now(), size: 68 } as Asset);
+      if ("mediaId" in result) thumbMediaId = result.mediaId;
     }
 
     // Build draft
