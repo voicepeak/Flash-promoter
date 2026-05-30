@@ -12,12 +12,12 @@ const setupGuides: Record<string, { title: string; steps: string[]; fields: { ke
     title: "微信公众号 AppID / AppSecret 配置",
     steps: [
       "1. 登录微信公众平台 https://mp.weixin.qq.com",
-      "2. 左侧菜单「设置与开发」→「基本配置」",
+      "2. 左侧菜单最下方「设置与开发」→「基本配置」",
       "3. 在页面中复制 AppID（开发者 ID）",
-      "4. 点击 AppSecret 旁的「重置」按钮，按提示用管理员微信扫码验证",
-      "5. 扫码后页面显示新的 AppSecret（仅显示一次，请立即复制）",
-      "6. 将 AppID 和 AppSecret 填入下方，点击保存",
-      "7. 如需调用 API，还需在「基本配置」中添加本机出口 IP 到白名单"
+      "4. 点击「基本配置」中的「开发者密码(AppSecret)」旁的「重置」按钮",
+      "5. 按提示用管理员微信扫码验证后，页面会展示新的 AppSecret",
+      "6. 立即复制 AppSecret（仅显示一次，之后以星号脱敏展示）",
+      "7. 需要调用 API 时，还需在「基本配置」→「IP 白名单」中添加本机公网 IP"
     ],
     fields: [
       { key: "appId", label: "AppID", placeholder: "wxXXXXXXXXXXXXXXXX" },
