@@ -16,7 +16,7 @@ import type {
   ValidationResult
 } from "@flash-promoter/core";
 import { createId, now } from "@flash-promoter/core";
-import { schemaSql } from "./schema.js";
+import { schemaSql, migrationSql } from "./schema.js";
 
 type PostRow = {
   id: string;
@@ -75,6 +75,9 @@ export class FlashPromoterRepository {
     this.db.exec("PRAGMA journal_mode = WAL;");
     this.db.exec("PRAGMA foreign_keys = ON;");
     this.db.exec(schemaSql);
+    for (const stmt of migrationSql.split(";").map((s) => s.trim()).filter(Boolean)) {
+      try { this.db.exec(`${stmt};`); } catch { /* column already exists */ }
+    }
   }
 
   createPost(post: CanonicalPost, status = "created"): CanonicalPost {
