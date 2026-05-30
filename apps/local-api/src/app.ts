@@ -433,7 +433,7 @@ export function createApp(repository: FlashPromoterRepository) {
 
     try {
       const adapter = adapterRegistry.get(draft.platform);
-      const result = await adapter.publish(draft, accountFor(draft.platform), mode);
+      const result = await adapter.publish(draft, accountFor(draft.platform, repository), mode);
       repository.updatePublishJob(job.id, result.status, result, result.errorMessage);
       repository.addPublishLog({
         jobId: job.id,
@@ -488,7 +488,7 @@ export function createApp(repository: FlashPromoterRepository) {
     if (!draft) return reply.code(404).send({ error: "draft_not_found" });
     const adapter = adapterRegistry.get(draft.platform);
     if (!adapter.createDraft) return reply.code(400).send({ error: "createDraft not supported for this platform" });
-    const result = await adapter.createDraft(draft, accountFor(draft.platform));
+    const result = await adapter.createDraft(draft, accountFor(draft.platform, repository));
     return { result };
   });
 
@@ -497,7 +497,7 @@ export function createApp(repository: FlashPromoterRepository) {
     if (!draft) return reply.code(404).send({ error: "draft_not_found" });
     const adapter = adapterRegistry.get(draft.platform);
     if (!adapter.submit) return reply.code(400).send({ error: "submit not supported for this platform" });
-    const result = await adapter.submit(draft, accountFor(draft.platform), { dryRun: false, confirmed: false });
+    const result = await adapter.submit(draft, accountFor(draft.platform, repository), { dryRun: false, confirmed: false });
     return { result };
   });
 
@@ -506,7 +506,7 @@ export function createApp(repository: FlashPromoterRepository) {
     if (!draft) return reply.code(404).send({ error: "draft_not_found" });
     const adapter = adapterRegistry.get(draft.platform);
     if (!adapter.prepareAssets) return reply.code(400).send({ error: "prepareAssets not supported for this platform" });
-    const result = await adapter.prepareAssets(draft, accountFor(draft.platform));
+    const result = await adapter.prepareAssets(draft, accountFor(draft.platform, repository));
     return { result };
   });
 
@@ -516,7 +516,7 @@ export function createApp(repository: FlashPromoterRepository) {
     const adapter = adapterRegistry.get(draft.platform);
     if (!adapter.dryRun) return reply.code(400).send({ error: "dryRun not supported for this platform" });
     const parsed = publishSchema.parse(request.body ?? {});
-    const result = await adapter.dryRun(draft, accountFor(draft.platform), parsed.mode ?? defaultModeForPlatform(draft.platform));
+    const result = await adapter.dryRun(draft, accountFor(draft.platform, repository), parsed.mode ?? defaultModeForPlatform(draft.platform));
     return { result };
   });
 
@@ -527,7 +527,7 @@ export function createApp(repository: FlashPromoterRepository) {
     if (!job || !job.externalId) return reply.code(404).send({ error: "no_published_external_id" });
     const adapter = adapterRegistry.get(draft.platform);
     if (!adapter.getStatus) return reply.code(400).send({ error: "getStatus not supported for this platform" });
-    const result = await adapter.getStatus(job.externalId, accountFor(draft.platform));
+    const result = await adapter.getStatus(job.externalId, accountFor(draft.platform, repository));
     return { result };
   });
 
@@ -538,7 +538,7 @@ export function createApp(repository: FlashPromoterRepository) {
     if (!job || !job.externalId) return reply.code(404).send({ error: "no_published_external_id" });
     const adapter = adapterRegistry.get(draft.platform);
     if (!adapter.getMetrics) return reply.code(400).send({ error: "getMetrics not supported for this platform" });
-    const result = await adapter.getMetrics(job.externalId, accountFor(draft.platform));
+    const result = await adapter.getMetrics(job.externalId, accountFor(draft.platform, repository));
     return { result };
   });
 
@@ -768,14 +768,23 @@ function defaultModeForPlatform(platform: PlatformId): PublishMode {
   return defaultPublishMode[platform as keyof typeof defaultPublishMode];
 }
 
-function accountFor(platform: PlatformId): PlatformAccount {
+function accountFor(platform: PlatformId, credStore: FlashPromoterRepository): PlatformAccount {
   const timestamp = Date.now();
+  let credentials = "";
+  try {
+    const credPost = credStore.getPost("platform_credentials");
+    if (credPost) {
+      const accounts = JSON.parse((credPost.body[0] as { text?: string }).text ?? "[]") as Array<Record<string, unknown>>;
+      const match = accounts.find((a) => a.platform === platform);
+      if (match?.credentials) credentials = JSON.stringify(match.credentials);
+    }
+  } catch {}
   return {
     id: `local-${platform}`,
     platform,
-    displayName: "local-mvp",
-    authType: platform === "mock" ? "mock" : "none",
-    encryptedCredentials: "",
+    displayName: platform,
+    authType: platform === "mock" ? "mock" : platform === "wordpress" ? "app-secret" : platform === "wechat" ? "app-secret" : "none",
+    encryptedCredentials: credentials,
     scopes: [],
     status: "active",
     createdAt: timestamp,
