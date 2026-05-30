@@ -11,17 +11,16 @@ const setupGuides: Record<string, { title: string; steps: string[]; fields: { ke
   wechat: {
     title: "微信公众号 AppID / AppSecret 配置",
     steps: [
-      "1. 登录微信公众平台 https://mp.weixin.qq.com",
-      "2. 左侧菜单最下方「设置与开发」→「基本配置」",
-      "3. 在页面中复制 AppID（开发者 ID）",
-      "4. 点击「基本配置」中的「开发者密码(AppSecret)」旁的「重置」按钮",
-      "5. 按提示用管理员微信扫码验证后，页面会展示新的 AppSecret",
-      "6. 立即复制 AppSecret（仅显示一次，之后以星号脱敏展示）",
-      "7. 需要调用 API 时，还需在「基本配置」→「IP 白名单」中添加本机公网 IP"
+      "1. 登录微信公众平台 https://mp.weixin.qq.com（或开发者平台 developers.weixin.qq.com）",
+      "2. 进入「设置与开发」→「基本配置」（开发者平台则为「开发信息」）",
+      "3. 页面上的「开发者 ID(AppID)」即为 AppID",
+      "4. 点击 AppSecret 旁的「重置」按钮，用管理员微信扫码",
+      "5. 扫码后 AppSecret 会短暂显示在页面上，立即复制",
+      "6. 注意：AppSecret 仅显示一次，关闭后无法再次查看"
     ],
     fields: [
-      { key: "appId", label: "AppID", placeholder: "wxXXXXXXXXXXXXXXXX" },
-      { key: "appSecret", label: "AppSecret", placeholder: "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" }
+      { key: "appId", label: "AppID（开发者 ID）", placeholder: "wxXXXXXXXXXXXXXXXX" },
+      { key: "appSecret", label: "AppSecret（开发者密码）", placeholder: "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" }
     ]
   },
   bilibili: {
