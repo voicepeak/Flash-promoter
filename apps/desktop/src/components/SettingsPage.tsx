@@ -12,11 +12,12 @@ const setupGuides: Record<string, { title: string; steps: string[]; fields: { ke
     title: "微信公众号 AppID / AppSecret 配置",
     steps: [
       "1. 登录微信公众平台 https://mp.weixin.qq.com",
-      "2. 左侧菜单「开发」→「基本配置」",
-      "3. 获取 AppID（开发者 ID）",
-      "4. 点击「重置」获取 AppSecret，扫码验证后复制",
-      "5. 将 AppID 和 AppSecret 填入下方，点击保存",
-      "6. 如需 IP 白名单，在「基本配置」中添加本机公网 IP"
+      "2. 左侧菜单「设置与开发」→「基本配置」",
+      "3. 在页面中复制 AppID（开发者 ID）",
+      "4. 点击 AppSecret 旁的「重置」按钮，按提示用管理员微信扫码验证",
+      "5. 扫码后页面显示新的 AppSecret（仅显示一次，请立即复制）",
+      "6. 将 AppID 和 AppSecret 填入下方，点击保存",
+      "7. 如需调用 API，还需在「基本配置」中添加本机出口 IP 到白名单"
     ],
     fields: [
       { key: "appId", label: "AppID", placeholder: "wxXXXXXXXXXXXXXXXX" },
@@ -26,10 +27,10 @@ const setupGuides: Record<string, { title: string; steps: string[]; fields: { ke
   bilibili: {
     title: "B站开放平台 OAuth 凭证",
     steps: [
-      "1. 登录 B站开放平台 https://open.bilibili.com",
-      "2. 创建应用：选择「能力接入」→「创建应用」",
-      "3. 填写应用名称、描述、回调地址（可用 http://localhost:3333/callback）",
-      "4. 获取 client_id 和 client_secret",
+      "1. 登录 B站开放平台 https://openhome.bilibili.com",
+      "2. 进入「开发者中心」→「创建应用」",
+      "3. 填写应用名称、描述，回调地址填 http://localhost:3333/callback",
+      "4. 提交审核通过后，在「应用详情」中查看 client_id 和 client_secret",
       "5. 将凭证填入下方，点击保存"
     ],
     fields: [
