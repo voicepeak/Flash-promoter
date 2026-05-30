@@ -5,12 +5,15 @@ import { generateStructuredPlatformAdaptation } from "../ai/local.js";
 import { platformManifests } from "./manifests.js";
 import { createDraftBase, enforceNoDirectPublish, isPlatformRealPublishEnabled, performDryRun, simulatedResult, validateWithLimits } from "./common.js";
 
-async function getAccessToken(cred: Record<string, string>): Promise<string | null> {
+async function getAccessToken(cred: Record<string, string>): Promise<{ token: string } | { error: string }> {
   try {
     const res = await fetch(`https://api.weixin.qq.com/cgi-bin/token?grant_type=client_credential&appid=${cred.appId}&secret=${cred.appSecret}`, { signal: AbortSignal.timeout(10000) });
     const data = await res.json() as Record<string, unknown>;
-    return (data.access_token as string) ?? null;
-  } catch { return null; }
+    if (data.access_token) return { token: data.access_token as string };
+    return { error: `获取 access_token 失败: ${String(data.errmsg ?? JSON.stringify(data))}` };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "连接微信服务器失败" };
+  }
 }
 
 async function callWechatApi(accessToken: string, path: string, method: string, body?: Record<string, unknown>) {
@@ -27,37 +30,43 @@ async function callWechatApi(accessToken: string, path: string, method: string, 
   }
 }
 
-async function uploadWechatImage(accessToken: string, asset: Asset): Promise<string | null> {
+async function uploadWechatImage(accessToken: string, asset: Asset): Promise<{ mediaId: string } | { error: string }> {
   try {
-    // Convert dataUrl or local path to a Buffer
     let buffer: ArrayBuffer;
-    let filename = "cover.png";
+    const filename = asset.filename ?? "cover.png";
+    const mime = asset.mimeType ?? "image/png";
+
     if (asset.dataUrl) {
-      const base64 = asset.dataUrl.replace(/^data:image\/\w+;base64,/, "");
-      const binary = atob(base64);
-      const bytes = new Uint8Array(binary.length);
-      for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-      buffer = bytes.buffer;
-      filename = asset.filename ?? "cover.png";
+      const match = asset.dataUrl.match(/^data:([^;]+);base64,(.+)$/);
+      if (match) {
+        const binary = atob(match[2]);
+        const bytes = new Uint8Array(binary.length);
+        for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+        buffer = bytes.buffer;
+      } else {
+        return { error: "图片 dataUrl 格式无效" };
+      }
     } else if (asset.localPath) {
-      // For local files, use fetch or fs — in Node.js env we use node:fs
       const { readFileSync } = await import("node:fs");
       const data = readFileSync(asset.localPath);
       buffer = data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength);
-      filename = asset.filename ?? "cover.png";
     } else {
-      return null;
+      return { error: "图片无可用的数据源" };
     }
 
     const formData = new FormData();
-    formData.append("media", new Blob([buffer], { type: asset.mimeType ?? "image/png" }), filename);
+    formData.append("media", new Blob([buffer], { type: mime }), filename);
+
     const res = await fetch(`https://api.weixin.qq.com/cgi-bin/material/add_material?access_token=${accessToken}&type=image`, {
-      method: "POST", body: formData, signal: AbortSignal.timeout(15000)
+      method: "POST", body: formData, signal: AbortSignal.timeout(20000)
     });
     const data = await res.json() as Record<string, unknown>;
-    if (data.errcode && data.errcode !== 0) return null;
-    return (data.media_id as string) ?? null;
-  } catch { return null; }
+    if (data.media_id) return { mediaId: data.media_id as string };
+    const err = String(data.errmsg ?? JSON.stringify(data));
+    return { error: err.includes("invalid") ? `素材上传失败: ${err}。请确认图片格式为 JPG/PNG，大小不超过 2MB。` : `素材上传失败: ${err}` };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "素材上传请求失败" };
+  }
 }
 
 function parseCred(account: PlatformAccount): Record<string, string> | null {
@@ -106,15 +115,21 @@ export const wechatAdapter: PlatformAdapter = {
       return simulatedResult("wechat", mode, "simulated", "公众号仅支持 draft 模式。");
     }
 
-    const token = await getAccessToken(cred);
-    if (!token) return { platform: "wechat", mode, status: "failed", errorMessage: "获取 access_token 失败，请检查 AppID/AppSecret", createdAt: now() };
+    const tokenResult = await getAccessToken(cred);
+    if ("error" in tokenResult) return { platform: "wechat", mode, status: "failed", errorMessage: tokenResult.error, createdAt: now() };
+    const token = tokenResult.token;
 
     // Upload cover image if available
     let thumbMediaId = "";
+    let coverError = "";
     const imageAsset = findImageAsset(draft);
     if (imageAsset) {
-      const mid = await uploadWechatImage(token, imageAsset);
-      if (mid) thumbMediaId = mid;
+      const uploadResult = await uploadWechatImage(token, imageAsset);
+      if ("mediaId" in uploadResult) {
+        thumbMediaId = uploadResult.mediaId;
+      } else {
+        coverError = uploadResult.error;
+      }
     }
 
     // Build draft
@@ -134,8 +149,8 @@ export const wechatAdapter: PlatformAdapter = {
       return {
         platform: "wechat", mode, status: "draft_created",
         externalId: String((res.data as Record<string, unknown>)?.media_id ?? createId("wechat_media")),
-        message: thumbMediaId ? "公众号草稿已创建（含封面图）" : "公众号草稿已创建（无封面图）",
-        raw: { realApiCalled: true, result: res.data, thumbMediaId },
+        message: thumbMediaId ? "公众号草稿已创建（含封面图）" : coverError ? `草稿已创建，但封面图上传失败: ${coverError}` : "公众号草稿已创建（无封面图）",
+        raw: { realApiCalled: true, result: res.data, thumbMediaId, coverError },
         createdAt: now()
       };
     }
