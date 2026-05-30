@@ -9,7 +9,9 @@ import { StepEditConfirm } from "./steps/StepEditConfirm.js";
 import { StepValidatePublish } from "./steps/StepValidatePublish.js";
 import { StepResults } from "./steps/StepResults.js";
 
-const userPlatforms: PlatformId[] = ["wechat", "bilibili", "zhihu-assist", "xhs-assist"];
+const userPlatforms: PlatformId[] = ["wechat", "bilibili", "zhihu-assist", "xhs-assist", "wordpress"];
+
+type ImageItem = { id: string; dataUrl: string; filename: string; source: "upload" | "ai" };
 const steps = ["输入原稿", "选择平台", "生成内容包", "编辑确认", "发布前检查", "发布结果"];
 
 type Analyzed = { title: string; summary: string; tags: string[]; keyPoints: string[]; highlights: string[]; suggestedPlatforms: string[]; tone: string };
@@ -28,9 +30,11 @@ export function ArticleFlowWizard() {
   const [drafts, setDrafts] = useState<PlatformDraft[]>([]);
   const [publishResults, setPublishResults] = useState<Record<string, PublishResult>>({});
 
+  const [images, setImages] = useState<ImageItem[]>([]);
+
   const showMessage = useCallback((msg: string) => { setMessage(msg); setTimeout(() => setMessage(null), 4000); }, []);
 
-  function handleAnalyzed(b: string, a: Analyzed, t: string) { setBody(b); setAnalyzed(a); setTagsText(t); setStep(1); }
+  function handleAnalyzed(b: string, a: Analyzed, t: string, imgs: ImageItem[]) { setBody(b); setAnalyzed(a); setTagsText(t); setImages(imgs); setStep(1); }
 
   async function handleGenerate() {
     setStep(2); setBusy(true); setMessage(null);

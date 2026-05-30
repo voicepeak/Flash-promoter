@@ -780,6 +780,34 @@ export function createApp(repository: FlashPromoterRepository) {
     } catch { return reply.code(500).send({ error: "删除失败" }); }
   });
 
+  // === AI Image Generation ===
+  app.post("/api/ai/generate-image", async (request, reply) => {
+    const body = request.body as { prompt: string; n?: number; size?: string };
+    const existing = repository.getPost(llmConfigKey);
+    if (!existing) return reply.code(400).send({ error: "请先在设置中配置 LLM" });
+    const config = JSON.parse((existing.body[0] as { text?: string }).text ?? "{}") as LlmConfig;
+    if (!config.enabled || !config.apiKeyEncrypted || !config.capabilities?.image) {
+      return reply.code(400).send({ error: "当前模型不支持图片生成，请在设置中启用多模态能力" });
+    }
+    try {
+      const res = await fetch(`${config.baseUrl}/images/generations`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${config.apiKeyEncrypted}` },
+        body: JSON.stringify({ model: config.model, prompt: body.prompt ?? "illustration", n: body.n ?? 1, size: body.size ?? "1024x1024" }),
+        signal: AbortSignal.timeout(config.timeoutMs)
+      });
+      if (!res.ok) {
+        const err = await res.text().catch(() => "");
+        return reply.code(400).send({ error: `图片生成失败: ${err.slice(0, 200)}` });
+      }
+      const data = await res.json() as { data: Array<{ url?: string; b64_json?: string }> };
+      const images = data.data?.map((img) => ({ url: img.url, b64Json: img.b64_json })) ?? [];
+      return { images };
+    } catch (error) {
+      return reply.code(500).send({ error: error instanceof Error ? error.message : "图片生成失败" });
+    }
+  });
+
   return app;
 }
 

@@ -2,6 +2,9 @@ import { useState } from "react";
 import { api } from "../../api/client.js";
 import { Sparkles, Loader2, ArrowRight, CheckCircle2 } from "lucide-react";
 import { AiFieldButton } from "../AiFieldButton.js";
+import { ImageManager } from "../ImageManager.js";
+
+type ImageItem = { id: string; dataUrl: string; filename: string; source: "upload" | "ai" };
 
 type Analyzed = {
   title: string; summary: string; tags: string[]; keyPoints: string[];
@@ -9,7 +12,7 @@ type Analyzed = {
 };
 
 type Props = {
-  onAnalyzed: (body: string, analyzed: Analyzed, tagsText: string) => void;
+  onAnalyzed: (body: string, analyzed: Analyzed, tagsText: string, images: ImageItem[]) => void;
 };
 
 export function StepInput(props: Props) {
@@ -17,6 +20,7 @@ export function StepInput(props: Props) {
   const [analyzing, setAnalyzing] = useState(false);
   const [analyzed, setAnalyzed] = useState<Analyzed | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [images, setImages] = useState<ImageItem[]>([]);
 
   async function analyze() {
     if (!body.trim()) return;
@@ -41,7 +45,7 @@ export function StepInput(props: Props) {
 
   function confirm() {
     if (!analyzed) return;
-    props.onAnalyzed(body, analyzed, analyzed.tags.join(", "));
+    props.onAnalyzed(body, analyzed, analyzed.tags.join(", "), images);
   }
 
   const canAnalyze = body.trim().length > 10;
@@ -57,6 +61,8 @@ export function StepInput(props: Props) {
         onChange={(e) => setBody(e.target.value)}
         placeholder="在此粘贴或输入你的原始内容…"
       />
+
+      <ImageManager images={images} onImagesChange={setImages} />
 
       <div style={{ display: "flex", gap: 10, marginTop: 14, alignItems: "center" }}>
         <button className="primary-button" type="button" disabled={!canAnalyze || analyzing} onClick={analyze}>

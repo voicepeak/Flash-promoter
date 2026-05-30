@@ -134,6 +134,7 @@ export const api = {
 
   // AI Actions
   aiAction: (req: AiActionRequest) => request<AiActionResult>("/ai/actions", { method: "POST", body: JSON.stringify(req) }),
+  generateImage: (prompt: string, n = 1, size = "1024x1024") => request<{ images: Array<{ url?: string; b64Json?: string }> }>("/ai/generate-image", { method: "POST", body: JSON.stringify({ prompt, n, size }) }),
 
   // Safety
   getSafety: () => request<{ realPublishEnabled: boolean; platformSwitches: Record<string, boolean>; platformGuides: Array<{ id: string; name: string; authType: string; setupNote: string; setupUrl: string; docs: string[]; publishLevels: string[]; riskLevel: string; defaultMode: string }> }>("/settings/safety"),
