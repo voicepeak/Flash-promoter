@@ -137,5 +137,10 @@ export const api = {
 
   // Safety
   getSafety: () => request<{ realPublishEnabled: boolean; platformSwitches: Record<string, boolean>; platformGuides: Array<{ id: string; name: string; authType: string; setupNote: string; setupUrl: string; docs: string[]; publishLevels: string[]; riskLevel: string; defaultMode: string }> }>("/settings/safety"),
-  saveSafety: (body: { realPublishEnabled?: boolean; platformSwitches?: Record<string, boolean> }) => request<{ ok: boolean }>("/settings/safety", { method: "POST", body: JSON.stringify(body) })
+  saveSafety: (body: { realPublishEnabled?: boolean; platformSwitches?: Record<string, boolean> }) => request<{ ok: boolean }>("/settings/safety", { method: "POST", body: JSON.stringify(body) }),
+
+  // Platform Credentials
+  getPlatformAccounts: () => request<{ accounts: Array<{ id: string; platform: string; displayName: string; authType: string; status: string; scopes: string[]; encryptedCredentials: string; createdAt: number }> }>("/platform-accounts"),
+  savePlatformAccount: (body: { platform: string; displayName?: string; authType?: string; credentials?: Record<string, string> }) => request<{ ok: boolean; account: object }>("/platform-accounts", { method: "POST", body: JSON.stringify(body) }),
+  deletePlatformAccount: (platform: string) => request<{ ok: boolean }>(`/platform-accounts/${platform}`, { method: "DELETE" })
 };
