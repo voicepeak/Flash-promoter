@@ -700,6 +700,59 @@ export function createApp(repository: FlashPromoterRepository) {
     return { ok: true };
   });
 
+  // === Platform Credentials (stored in SQLite) ===
+  const credConfigKey = "platform_credentials";
+
+  app.get("/api/platform-accounts", async () => {
+    const post = repository.getPost(credConfigKey);
+    if (!post) return { accounts: [] };
+    try {
+      const raw = JSON.parse((post.body[0] as { text?: string }).text ?? "[]") as Array<Record<string, unknown>>;
+      return { accounts: raw.map((r) => ({ ...r, encryptedCredentials: "***" })) };
+    } catch { return { accounts: [] }; }
+  });
+
+  app.post("/api/platform-accounts", async (request, reply) => {
+    const body = request.body as { platform: string; displayName?: string; authType?: string; credentials?: Record<string, string> };
+    try {
+      const existing = repository.getPost(credConfigKey);
+      let accounts: Array<Record<string, unknown>> = [];
+      if (existing) {
+        try { accounts = JSON.parse((existing.body[0] as { text?: string }).text ?? "[]") as Array<Record<string, unknown>>; } catch {}
+      }
+      const idx = accounts.findIndex((a) => a.platform === body.platform);
+      const entry = {
+        platform: body.platform, displayName: body.displayName ?? body.platform,
+        authType: body.authType ?? "api-key", credentials: body.credentials ?? {},
+        status: "active", createdAt: Date.now()
+      };
+      if (idx >= 0) accounts[idx] = entry; else accounts.push(entry);
+
+      const json = JSON.stringify(accounts);
+      if (existing) {
+        existing.body = [{ type: "paragraph", text: json }];
+        repository.updatePost(existing);
+      } else {
+        repository.createPost({ id: credConfigKey, title: "Platform Credentials", body: [{ type: "paragraph", text: json }], assets: [], tags: [], contentType: "article", createdAt: Date.now(), updatedAt: Date.now() });
+      }
+      return { ok: true, account: { ...entry, credentials: "***" } };
+    } catch (error) {
+      return reply.code(400).send({ error: error instanceof Error ? error.message : "保存失败" });
+    }
+  });
+
+  app.delete<{ Params: { platform: string } }>("/api/platform-accounts/:platform", async (request, reply) => {
+    const post = repository.getPost(credConfigKey);
+    if (!post) return reply.code(404).send({ error: "not_found" });
+    try {
+      let accounts = JSON.parse((post.body[0] as { text?: string }).text ?? "[]") as Array<Record<string, unknown>>;
+      accounts = accounts.filter((a) => a.platform !== request.params.platform);
+      post.body = [{ type: "paragraph", text: JSON.stringify(accounts) }];
+      repository.updatePost(post);
+      return { ok: true };
+    } catch { return reply.code(500).send({ error: "删除失败" }); }
+  });
+
   return app;
 }
 

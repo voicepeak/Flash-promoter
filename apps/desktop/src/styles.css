@@ -1773,3 +1773,100 @@ textarea,
 .safety-section {
   padding: 10px 0 0;
 }
+
+/* ===== Credential Config ===== */
+.cred-platform {
+  padding: 10px 0;
+  border-bottom: 1px solid var(--line);
+}
+.cred-platform:last-child { border-bottom: 0; }
+
+.cred-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  cursor: pointer;
+  padding: 4px 0;
+}
+.cred-header:hover { background: rgba(0,0,0,0.01); border-radius: 6px; }
+
+.cred-header-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.cred-header-left strong { font-size: 15px; }
+
+.cred-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+}
+.cred-status.ok { background: #e8f5e9; color: #2e7d32; }
+.cred-status.warn { background: #fff3e0; color: #e65100; }
+.cred-status.muted { background: #f5f0e4; color: var(--muted); }
+
+.toggle-switch.mini {
+  width: 34px;
+  height: 18px;
+  margin-left: 6px;
+}
+.toggle-switch.mini::after {
+  width: 13px;
+  height: 13px;
+}
+.toggle-switch.mini.on::after {
+  transform: translateX(17px);
+}
+
+.cred-body {
+  margin-top: 10px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #fffefa;
+}
+
+.cred-guide {
+  margin-bottom: 14px;
+  padding: 12px;
+  border-left: 3px solid var(--accent);
+  background: #eef7f3;
+  border-radius: 0 6px 6px 0;
+}
+
+.cred-guide strong {
+  display: block;
+  margin-bottom: 8px;
+  font-size: 14px;
+}
+
+.cred-guide ol {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 13px;
+  line-height: 1.8;
+  color: var(--muted);
+}
+
+.cred-guide li { padding: 0; }
+
+.cred-fields {
+  display: grid;
+  gap: 10px;
+}
+
+.cred-fields label {
+  display: grid;
+  gap: 4px;
+}
+
+.cred-fields span {
+  font-size: 13px;
+  color: var(--muted);
+}
