@@ -5,7 +5,7 @@
   "type": "module",
   "description": "Flash Promoter — write once, publish everywhere",
   "author": "flash-promoter",
-  "main": "electron/main.js",
+  "main": "electron/main.cjs",
   "scripts": {
     "dev": "vite --host 127.0.0.1",
     "dev:electron": "node ../../scripts/dev-electron.mjs",
