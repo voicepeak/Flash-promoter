@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ArrowRight } from "lucide-react";
 import { ImageManager } from "../ImageManager.js";
 
@@ -6,11 +6,19 @@ type ImageItem = { id: string; dataUrl: string; filename: string; source: "uploa
 
 type Props = {
   onConfirm: (body: string, images: ImageItem[]) => void;
+  initialBody?: string;
+  initialImages?: ImageItem[];
+  resetKey?: string | number;
 };
 
 export function StepInput(props: Props) {
-  const [body, setBody] = useState("");
-  const [images, setImages] = useState<ImageItem[]>([]);
+  const [body, setBody] = useState(props.initialBody ?? "");
+  const [images, setImages] = useState<ImageItem[]>(props.initialImages ?? []);
+
+  useEffect(() => {
+    setBody(props.initialBody ?? "");
+    setImages(props.initialImages ?? []);
+  }, [props.resetKey]);
 
   const canNext = body.trim().length > 10;
 

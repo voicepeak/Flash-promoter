@@ -96,6 +96,10 @@ button:disabled {
   min-width: 0;
 }
 
+.workspace-pane[hidden] {
+  display: none;
+}
+
 .top-bar {
   display: flex;
   justify-content: space-between;
@@ -766,6 +770,94 @@ textarea,
 .compact-button.active {
   border-color: var(--accent);
   background: #ecf8f2;
+}
+
+.history-record-row {
+  align-items: stretch;
+  padding: 0;
+  overflow: hidden;
+}
+
+.history-record-row.active {
+  border-color: var(--accent);
+  background: #ecf8f2;
+}
+
+.history-row-main {
+  flex: 1;
+  display: grid;
+  gap: 7px;
+  min-width: 0;
+  padding: 10px;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+
+.history-row-main small {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  white-space: normal;
+}
+
+.history-content-type,
+.history-status-pill {
+  display: inline-flex;
+  align-items: center;
+  min-height: 22px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.history-content-type {
+  background: #f2eadc;
+  color: var(--charcoal);
+}
+
+.history-status-pill.ok {
+  background: #e4f6ec;
+  color: #146947;
+}
+
+.history-status-pill.info {
+  background: #eaf1fb;
+  color: #2c5f9e;
+}
+
+.history-status-pill.warn {
+  background: #fff3d8;
+  color: #865300;
+}
+
+.history-status-pill.danger {
+  background: #fff0ec;
+  color: #a3392d;
+}
+
+.history-status-pill.muted {
+  background: #f1eee8;
+  color: var(--muted);
+}
+
+.history-row-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px;
+  border-left: 1px solid var(--line);
+}
+
+.history-row-actions button,
+.history-section-head button {
+  min-height: 30px;
+  padding: 5px 9px;
+  font-size: 12px;
 }
 
 .compact-row span,
@@ -1488,6 +1580,24 @@ textarea,
 
 .draft-mini-card small {
   color: var(--muted);
+}
+
+.history-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.history-section-head h2 {
+  margin: 0;
+}
+
+.draft-status-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
 }
 
 .field-hint {

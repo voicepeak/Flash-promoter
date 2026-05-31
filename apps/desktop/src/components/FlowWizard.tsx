@@ -1,10 +1,27 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ContentTypeStep } from "./ContentTypeStep.js";
 import { ArticleFlowWizard } from "./ArticleFlowWizard.js";
 import { VideoFlowWizard } from "./VideoFlowWizard.js";
 
-export function FlowWizard() {
+export type PublishResumeRequest = {
+  postId: string;
+  contentType: "article" | "video";
+  requestId: number;
+};
+
+type Props = {
+  resumeRequest?: PublishResumeRequest | null;
+  onResumeConsumed?: () => void;
+};
+
+export function FlowWizard(props: Props) {
   const [contentType, setContentType] = useState<"article" | "video" | null>(null);
+
+  useEffect(() => {
+    if (props.resumeRequest) {
+      setContentType(props.resumeRequest.contentType);
+    }
+  }, [props.resumeRequest?.requestId]);
 
   if (!contentType) {
     return (
@@ -21,8 +38,18 @@ export function FlowWizard() {
   }
 
   if (contentType === "article") {
-    return <ArticleFlowWizard />;
+    return (
+      <ArticleFlowWizard
+        resumeRequest={props.resumeRequest?.contentType === "article" ? props.resumeRequest : null}
+        onResumeConsumed={props.onResumeConsumed}
+      />
+    );
   }
 
-  return <VideoFlowWizard />;
+  return (
+    <VideoFlowWizard
+      resumeRequest={props.resumeRequest?.contentType === "video" ? props.resumeRequest : null}
+      onResumeConsumed={props.onResumeConsumed}
+    />
+  );
 }

@@ -38,6 +38,19 @@ type CreateVideoPayload = {
   assets: Asset[];
 };
 
+export type PostWorkflowStatus = {
+  editState: "empty" | "generated" | "edited";
+  editLabel: string;
+  publishState: "not_published" | "publishing" | "done" | "published" | "failed";
+  publishLabel: string;
+  lastPublishedAt?: number;
+};
+
+export type HistoryPost = CanonicalPost & {
+  status: string;
+  workflowStatus?: PostWorkflowStatus;
+};
+
 const headers = {
   "Content-Type": "application/json"
 };
@@ -99,7 +112,7 @@ export const api = {
       }
     ),
 
-  posts: () => request<{ posts: Array<CanonicalPost & { status: string }> }>("/posts"),
+  posts: () => request<{ posts: HistoryPost[] }>("/posts"),
 
   post: (postId: string) => request<{ post: CanonicalPost; drafts: PlatformDraft[] }>(`/posts/${postId}`),
 

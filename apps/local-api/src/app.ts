@@ -25,6 +25,7 @@ import {
   type PlatformDraft,
   type PlatformDraftUpdate,
   type PlatformId,
+  type PublishJob,
   type PublishMode,
   type ValidationResult,
   type VideoAdaptationInput
@@ -183,9 +184,19 @@ export function createApp(repository: FlashPromoterRepository, options: { dbPath
     });
   });
 
-  app.get("/api/posts", async () => ({
-    posts: repository.listPosts()
-  }));
+  app.get("/api/posts", async () => {
+    const jobs = repository.listPublishJobs(1000);
+    return {
+      posts: repository.listPosts().map((post) => {
+        const drafts = repository.listPlatformDrafts(post.id);
+        const postJobs = jobs.filter((job) => job.postId === post.id);
+        return {
+          ...post,
+          workflowStatus: buildPostWorkflowStatus(drafts, postJobs)
+        };
+      })
+    };
+  });
 
   app.get<{ Params: { postId: string } }>("/api/posts/:postId", async (request, reply) => {
     const post = repository.getPost(request.params.postId);
@@ -837,6 +848,49 @@ export function createApp(repository: FlashPromoterRepository, options: { dbPath
   });
 
   return app;
+}
+
+function buildPostWorkflowStatus(drafts: PlatformDraft[], jobs: PublishJob[]) {
+  const edited = drafts.some((draft) => draft.userConfirmed || draft.updatedAt > draft.createdAt);
+  const editState = edited ? "edited" : drafts.length > 0 ? "generated" : "empty";
+  const editLabel = edited ? "已编辑" : drafts.length > 0 ? "已生成" : "未生成";
+  const orderedJobs = [...jobs].sort((a, b) => b.updatedAt - a.updatedAt);
+  const published = orderedJobs.find((job) => job.status === "published");
+  const successful = orderedJobs.find((job) => isSuccessfulPublishStatus(job.status));
+  const pending = orderedJobs.find((job) => ["pending", "validating", "asset_preparing", "ready", "reviewing"].includes(job.status));
+  const failed = orderedJobs.find((job) => job.status === "failed");
+  const statusJob = published ?? successful ?? pending ?? failed;
+
+  if (!statusJob) {
+    return { editState, editLabel, publishState: "not_published", publishLabel: "未发布" };
+  }
+  if (published) {
+    return { editState, editLabel, publishState: "published", publishLabel: "已发布", lastPublishedAt: published.updatedAt };
+  }
+  if (successful) {
+    return { editState, editLabel, publishState: "done", publishLabel: publishStatusLabel(successful.status), lastPublishedAt: successful.updatedAt };
+  }
+  if (pending) {
+    return { editState, editLabel, publishState: "publishing", publishLabel: "发布中" };
+  }
+  return { editState, editLabel, publishState: "failed", publishLabel: "发布失败" };
+}
+
+function isSuccessfulPublishStatus(status: string): boolean {
+  return ["simulated", "copied", "share_opened", "assist_opened", "draft_created", "submitted", "published"].includes(status);
+}
+
+function publishStatusLabel(status: string): string {
+  switch (status) {
+    case "draft_created": return "已创建草稿";
+    case "submitted": return "已提交";
+    case "assist_opened": return "已打开辅助发布";
+    case "share_opened": return "已打开分享";
+    case "copied": return "已复制";
+    case "simulated": return "已模拟";
+    case "published": return "已发布";
+    default: return status;
+  }
 }
 
 async function validateDraft(draft: PlatformDraft): Promise<ValidationResult> {
