@@ -282,9 +282,6 @@ export function createApp(repository: FlashPromoterRepository, options: { dbPath
     const parsed = generateSchema.parse(request.body ?? {});
     const platforms = parsed.platforms as PlatformId[];
 
-    const llmPost = repository.getPost(llmConfigKey);
-    const llmConfig: LlmConfig | null = llmPost ? JSON.parse((llmPost.body[0] as { text?: string }).text ?? "{}") as LlmConfig : null;
-
     const input: VideoAdaptationInput = {
       id: post.id,
       title: post.title,
@@ -299,36 +296,7 @@ export function createApp(repository: FlashPromoterRepository, options: { dbPath
 
     let drafts: PlatformDraft[];
 
-    const useLlm = !!(llmConfig?.enabled && llmConfig.apiKeyEncrypted && llmConfig.baseUrl);
-
-    if (useLlm && llmConfig) {
-      const body = (input.script ?? input.transcript ?? input.summary ?? "").trim();
-      const hasEnoughContent = body.length >= 5 || (input.title ?? "").length >= 3;
-      drafts = [];
-      for (const platform of platforms) {
-        if (platform === "mock") continue;
-        if (!hasEnoughContent) {
-          const fallback = generateVideoPlatformAdaptation(input, [platform]);
-          drafts.push(...fallback);
-          continue;
-        }
-        const prompt = buildPlatformGenerationPrompt(platform, input.title, body, input.summary ?? "", input.tags);
-        try {
-          const res = await callLlm(llmConfig, {
-            contentId: post.id, action: "generate", contentType: "video",
-            currentValue: prompt, slotKey: platform, fieldLabel: platform,
-            inputContext: { title: input.title, body, summary: input.summary, tags: input.tags, topic: input.topic }
-          });
-          const draft = parsePlatformDraft(platform, post.id, input.title, body, input.summary ?? "", input.tags, res.candidates[0] ?? "", post.assets);
-          drafts.push(draft);
-        } catch {
-          const fallback = generateVideoPlatformAdaptation(input, [platform]);
-          drafts.push(...fallback);
-        }
-      }
-    } else {
-      drafts = generateVideoPlatformAdaptation(input, platforms);
-    }
+    drafts = generateVideoPlatformAdaptation(input, platforms);
 
     repository.replacePlatformDrafts(post.id, drafts);
     return {
