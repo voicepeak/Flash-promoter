@@ -1,8 +1,6 @@
 import { CheckCircle2, FileCheck2, Save, Send, ShieldAlert } from "lucide-react";
-import { marked } from "marked";
 import type { PlatformDraft, PlatformDraftUpdate, PlatformId, PublishMode, ValidationResult } from "@flash-promoter/core";
-import { platformLabels } from "@flash-promoter/core";
-import { sanitizeHtml } from "./html.js";
+import { platformLabels, renderPlatformDraft } from "@flash-promoter/core";
 
 type Props = {
   drafts: PlatformDraft[];
@@ -257,7 +255,7 @@ function ArticlePreview({ draft }: { draft: PlatformDraft }) {
     <article className="article-preview">
       <h1>{draft.title}</h1>
       {draft.summary ? <p className="summary">{draft.summary}</p> : null}
-      <MarkdownBody body={draft.body} />
+      <RenderedBody draft={draft} />
       <TagList tags={draft.tags} />
     </article>
   );
@@ -272,7 +270,7 @@ function WechatPreview({ draft }: { draft: PlatformDraft }) {
       <h1>{draft.title}</h1>
       <p className="byline">flash-promoter</p>
       {draft.summary ? <p className="summary">{draft.summary}</p> : null}
-      <MarkdownBody body={draft.body} />
+      <RenderedBody draft={draft} />
     </article>
   );
 }
@@ -282,7 +280,7 @@ function ZhihuPreview({ draft }: { draft: PlatformDraft }) {
     <article className="zhihu-preview">
       <h1>{draft.title}</h1>
       <TagList tags={(draft.platformMeta.topics as string[] | undefined) ?? draft.topics ?? draft.tags} />
-      <MarkdownBody body={draft.body} />
+      <RenderedBody draft={draft} />
       <MetaList title="结构提示" items={(draft.platformMeta.logicHints as string[] | undefined) ?? []} />
     </article>
   );
@@ -296,7 +294,7 @@ function BilibiliPreview({ draft }: { draft: PlatformDraft }) {
       <p className="summary">{String(draft.platformMeta.description ?? draft.summary ?? "")}</p>
       <div className="meta-line">分区建议：{String(draft.platformMeta.partitionSuggestion ?? "未选择")}</div>
       <TagList tags={tags} />
-      <MarkdownBody body={draft.body} />
+      <RenderedBody draft={draft} />
       <MetaList title="置顶评论" items={[String(draft.platformMeta.pinnedComment ?? "")].filter(Boolean)} />
     </article>
   );
@@ -310,7 +308,7 @@ function XhsPreview({ draft }: { draft: PlatformDraft }) {
       <div className="xhs-phone">
         <div className="xhs-cover">{String(draft.platformMeta.coverText ?? draft.title)}</div>
         <h1>{draft.title}</h1>
-        <MarkdownBody body={draft.body} />
+        <RenderedBody draft={draft} />
         <TagList tags={hashtags} />
       </div>
       <div className="card-grid">
@@ -325,9 +323,8 @@ function XhsPreview({ draft }: { draft: PlatformDraft }) {
   );
 }
 
-function MarkdownBody({ body }: { body: PlatformDraft["body"] }) {
-  const markdown = typeof body === "string" ? body : body.map((block) => ("text" in block ? block.text : "")).join("\n\n");
-  const html = sanitizeHtml(marked.parse(markdown, { async: false }) as string);
+function RenderedBody({ draft }: { draft: PlatformDraft }) {
+  const html = renderPlatformDraft(draft, { target: "preview" }).bodyHtml;
   return <div className="markdown-body" dangerouslySetInnerHTML={{ __html: html }} />;
 }
 

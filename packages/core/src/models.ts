@@ -78,7 +78,6 @@ export type PlatformId =
   | "bilibili"
   | "zhihu-assist"
   | "xhs-assist"
-  | "wordpress"
   // P1
   | "douyin"
   | "kuaishou"
@@ -211,7 +210,6 @@ export const defaultPublishMode: Record<string, PublishMode> = {
   bilibili: "simulate",
   "zhihu-assist": "assist",
   "xhs-assist": "assist",
-  wordpress: "draft",
   douyin: "simulate",
   kuaishou: "simulate",
   youtube: "draft",
@@ -585,7 +583,6 @@ export const platformLabels: Record<PlatformId, string> = {
   bilibili: "B站",
   "zhihu-assist": "知乎",
   "xhs-assist": "小红书",
-  wordpress: "WordPress",
   douyin: "抖音",
   kuaishou: "快手",
   youtube: "YouTube",
@@ -619,7 +616,6 @@ export const platformRegions: Record<string, PlatformRegion> = {
   bilibili: "cn",
   "zhihu-assist": "cn",
   "xhs-assist": "cn",
-  wordpress: "global",
   douyin: "cn",
   kuaishou: "cn",
   youtube: "global",

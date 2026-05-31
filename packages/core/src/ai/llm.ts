@@ -21,6 +21,9 @@ export type LlmConfig = {
   temperature: number;
   timeoutMs: number;
   maxTokens?: number;
+  imageBaseUrl?: string;
+  imageApiKey?: string;
+  imageModel?: string;
   capabilities: LlmModelCapabilities;
   createdAt: number;
   updatedAt: number;

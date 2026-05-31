@@ -45,7 +45,13 @@ export function VideoFlowWizard() {
       setCurrentPostId(created.id);
       const generated = await api.generateVideoDrafts(created.id, selectedPlatforms);
       setDrafts(generated.items); setStep(3); showMessage("视频发布材料已生成");
-    } catch (error) { setStep(1); setMessage(error instanceof Error ? error.message : "生成失败"); } finally { setBusy(false); }
+    } catch (error) {
+      setStep(1);
+      const msg = error instanceof TypeError && error.message === "Failed to fetch"
+        ? "生成失败，请确认 API 服务已启动"
+        : error instanceof Error ? error.message : "生成失败";
+      setMessage(msg);
+    } finally { setBusy(false); }
   }
 
   async function handlePublishAll() {

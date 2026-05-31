@@ -61,13 +61,14 @@ export function parsePlatformDraft(
   body: string,
   summary: string,
   tags: string[],
-  llmOutput: string
+  llmOutput: string,
+  assets?: import("../models.js").Asset[]
 ): PlatformDraft {
   const json = tryParse(llmOutput) ?? {};
   const timestamp = now();
   const base = {
     id: createId("draft"), postId, aiGenerated: true, userConfirmed: false,
-    createdAt: timestamp, updatedAt: timestamp
+    createdAt: timestamp, updatedAt: timestamp, assets
   };
 
   switch (platform) {

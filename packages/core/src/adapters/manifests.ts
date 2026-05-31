@@ -123,31 +123,6 @@ export const platformManifests: Record<string, PlatformManifest> = {
     featureFlags: { realPublish: false, draft: false, assist: true, share: true, copy: true, cardExport: true }
   },
 
-  wordpress: {
-    id: "wordpress",
-    name: "WordPress",
-    region: "global",
-    homepage: "https://wordpress.org",
-    docs: ["https://developer.wordpress.org/rest-api/"],
-    supportedContentTypes: ["article", "long-form", "image-note"],
-    supportedPackageTypes: ["article-package", "wordpress-post", "wordpress-page"],
-    publishLevels: ["simulate", "draft", "submit", "publish", "status", "metrics"],
-    auth: { type: "api-key", requiredScopes: ["posts"], setupUrl: "", note: "需要 Application Password 或 OAuth" },
-    assets: {
-      supportedImageFormats: ["image/jpeg", "image/png", "image/webp", "image/gif"],
-      supportedVideoFormats: ["video/mp4", "video/webm"],
-      maxImageSizeBytes: 50 * 1024 * 1024,
-      maxVideoSizeBytes: 200 * 1024 * 1024,
-      maxVideoDurationSec: 3600,
-      maxCoverCount: 1,
-      supportedContentTypes: ["article", "long-form"]
-    },
-    limits: { titleMaxLength: 200, bodyMaxLength: 100000, tagMaxCount: 20, imagesMaxCount: 100, videosMaxCount: 10, summaryMaxLength: 300 },
-    riskLevel: "low",
-    defaultMode: "draft",
-    featureFlags: { realPublish: true, draft: true, assist: false, status: true, metrics: true }
-  },
-
   // P1 platforms
   douyin: {
     id: "douyin",
