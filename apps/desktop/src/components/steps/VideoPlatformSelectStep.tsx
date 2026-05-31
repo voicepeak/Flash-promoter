@@ -12,9 +12,7 @@ type Props = {
 
 const videoPlatforms: { id: PlatformId; name: string; desc: string; modeLabel: string }[] = [
   { id: "bilibili", name: "B站", desc: "视频标题、简介、分区建议、置顶评论和时间轴", modeLabel: "生成视频投稿材料" },
-  { id: "xhs-assist", name: "小红书", desc: "短视频标题、文案、话题标签和首评建议", modeLabel: "生成短视频笔记文案" },
-  { id: "zhihu-assist", name: "知乎", desc: "视频回答标题、导语、说明文案和话题", modeLabel: "生成视频回答材料" },
-  { id: "wechat", name: "公众号", desc: "视频介绍图文、摘要、正文和封面文案", modeLabel: "生成视频介绍图文" }
+  { id: "xhs-assist", name: "小红书", desc: "短视频标题、文案、话题标签和首评建议", modeLabel: "生成短视频笔记文案" }
 ];
 
 export function VideoPlatformSelectStep(props: Props) {

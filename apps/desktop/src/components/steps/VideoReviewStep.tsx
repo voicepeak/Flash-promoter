@@ -1,7 +1,7 @@
 import { useState } from "react";
 import type { PlatformDraft, PlatformId } from "@flash-promoter/core";
-import { platformLabels, renderPlatformDraft } from "@flash-promoter/core";
-import { ArrowLeft, ArrowRight, CheckCircle2, Save } from "lucide-react";
+import { platformLabels } from "@flash-promoter/core";
+import { ArrowLeft, ArrowRight, CheckCircle2, FileVideo, Save } from "lucide-react";
 import { api } from "../../api/client.js";
 
 type Props = {
@@ -79,7 +79,12 @@ export function VideoReviewStep(props: Props) {
               <button type="button" disabled={props.busy || draft.userConfirmed} onClick={() => confirm(draft)}><CheckCircle2 size={17} /> {draft.userConfirmed ? "已确认" : "确认当前平台"}</button>
             </div>
           </div>
-          <div className="edit-right"><h3>预览</h3><div className="platform-preview"><DraftPreview draft={draft} /></div></div>
+          <div className="edit-right">
+            <h3 style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 12 }}><FileVideo size={16} /> 发布信息</h3>
+            <div className="platform-preview">
+              <VideoMetaCard draft={draft} />
+            </div>
+          </div>
         </div>
       ) : <p className="muted">请选择一个平台开始编辑。</p>}
 
@@ -91,11 +96,44 @@ export function VideoReviewStep(props: Props) {
   );
 }
 
-function DraftPreview({ draft }: { draft: PlatformDraft }) {
-  const html = renderPlatformDraft(draft, { target: "preview" }).previewHtml;
+function VideoMetaCard({ draft }: { draft: PlatformDraft }) {
+  const meta = draft.platformMeta ?? {};
+  const entries: { label: string; value: string }[] = [];
+
+  if (draft.title) entries.push({ label: "标题", value: draft.title });
+  if (draft.summary) entries.push({ label: "简介", value: draft.summary });
+  if (draft.tags?.length) entries.push({ label: "标签", value: draft.tags.join(" · ") });
+  if (draft.platform === "bilibili") {
+    if (meta.partitionSuggestion) entries.push({ label: "分区建议", value: String(meta.partitionSuggestion) });
+    if (meta.pinnedComment) entries.push({ label: "置顶评论", value: String(meta.pinnedComment) });
+  }
+  if (draft.platform === "xhs-assist") {
+    if (meta.coverText) entries.push({ label: "封面文案", value: String(meta.coverText) });
+    if (Array.isArray(meta.hashtags) && meta.hashtags.length) entries.push({ label: "话题", value: (meta.hashtags as string[]).join(" · ") });
+  }
+  if (draft.platform === "zhihu-assist") {
+    if (meta.topics && Array.isArray(meta.topics) && meta.topics.length) entries.push({ label: "话题", value: (meta.topics as string[]).join(" · ") });
+  }
+  if (draft.platform === "wechat") {
+    if (meta.coverText) entries.push({ label: "封面文案", value: String(meta.coverText) });
+  }
+
+  if (!entries.length) return <p className="muted" style={{ padding: 20 }}>暂无发布信息</p>;
+
   return (
-    <div style={{ padding: 20 }}>
-      <div dangerouslySetInnerHTML={{ __html: html }} />
+    <div style={{ padding: 16, display: "flex", flexDirection: "column", gap: 12 }}>
+      {entries.map((e, i) => (
+        <div key={i}>
+          <span style={{ fontSize: 11, color: "var(--muted)", display: "block", marginBottom: 2 }}>{e.label}</span>
+          <span style={{ fontSize: 13, lineHeight: 1.5, wordBreak: "break-all" }}>{e.value}</span>
+        </div>
+      ))}
+      {typeof draft.body === "string" && draft.body.trim() && (
+        <div>
+          <span style={{ fontSize: 11, color: "var(--muted)", display: "block", marginBottom: 2 }}>描述</span>
+          <span style={{ fontSize: 13, lineHeight: 1.7, wordBreak: "break-all", whiteSpace: "pre-wrap" }}>{draft.body.slice(0, 300)}{draft.body.length > 300 ? "…" : ""}</span>
+        </div>
+      )}
     </div>
   );
 }

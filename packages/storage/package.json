@@ -1,6 +1,6 @@
 {
   "name": "@flash-promoter/storage",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "type": "module",
   "main": "src/index.ts",
   "exports": {
@@ -11,7 +11,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@flash-promoter/core": "0.1.0"
+    "@flash-promoter/core": "1.0.0"
   },
   "devDependencies": {
     "@types/node": "^24.10.1",

@@ -13,7 +13,7 @@ import { Home } from "lucide-react";
 
 const videoSteps = ["上传视频", "选择平台", "生成发布包", "编辑确认", "发布前检查", "发布结果"];
 
-const videoPlatforms: PlatformId[] = ["bilibili", "xhs-assist", "zhihu-assist", "wechat"];
+const videoPlatforms: PlatformId[] = ["bilibili", "xhs-assist"];
 
 type Props = {
   resumeRequest?: PublishResumeRequest | null;
@@ -124,10 +124,14 @@ export function VideoFlowWizard(props: Props = {}) {
           let frameImages: string[] | undefined;
           if (videoFile) {
             try {
-              frameImages = await extractVideoFrames(videoFile, 8);
-            } catch { /* frame extraction is best-effort */ }
+              frameImages = await extractVideoFrames(videoFile, 6);
+              if (!frameImages || frameImages.length === 0) {
+                showMessage("未能从视频中提取截图帧，将仅用文本信息分析");
+              }
+            } catch (e) {
+              showMessage(`视频帧提取失败：${e instanceof Error ? e.message : "未知错误"}，将仅用文本分析`);
+            }
           }
-          // If no text but we have frames, build a minimal description from file metadata
           const analysisText = scriptText.trim() || (videoFile ? `视频文件：${videoFile.name}\n时长：${duration}\n分辨率：${resolution}` : scriptText);
           const analysis = await api.aiAction({
             contentId: "generate-stage", action: "analyzeContent", contentType: "video",
@@ -244,49 +248,59 @@ function tryParse(raw: string): Record<string, unknown> | null {
 }
 
 async function extractVideoFrames(file: File, count: number): Promise<string[]> {
-  return new Promise((resolve, reject) => {
-    const video = document.createElement("video");
-    video.preload = "metadata";
-    video.muted = true;
-    const url = URL.createObjectURL(file);
+  const video = document.createElement("video");
+  video.preload = "auto";
+  video.muted = true;
+  video.playsInline = true;
+  video.style.position = "fixed";
+  video.style.top = "-9999px";
+  video.style.left = "-9999px";
+  video.style.width = "320px";
+  video.style.height = "240px";
+  document.body.appendChild(video);
 
-    video.onloadedmetadata = async () => {
-      const duration = video.duration;
-      if (!duration || duration <= 0) { URL.revokeObjectURL(url); reject(new Error("Invalid video duration")); return; }
+  const url = URL.createObjectURL(file);
 
-      const canvas = document.createElement("canvas");
-      const ctx = canvas.getContext("2d");
-      if (!ctx) { URL.revokeObjectURL(url); reject(new Error("No canvas context")); return; }
+  try {
+    await new Promise<void>((resolve, reject) => {
+      video.onloadedmetadata = () => resolve();
+      video.onerror = () => reject(new Error("视频无法加载，格式可能不支持"));
+      video.src = url;
+    });
 
-      const frames: string[] = [];
-      const seekPoints: number[] = [];
-      const step = duration / (count + 1);
-      for (let i = 1; i <= count; i++) {
-        seekPoints.push(step * i);
-      }
+    const duration = video.duration;
+    if (!duration || duration <= 0) throw new Error("视频时长无效");
 
-      for (const seek of seekPoints) {
-        try {
-          await new Promise<void>((rs, rj) => {
-            const onSeek = () => {
-              video.removeEventListener("seeked", onSeek);
-          canvas.width = video.videoWidth || 640;
-          canvas.height = video.videoHeight || 360;
-          ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-          frames.push(canvas.toDataURL("image/jpeg", 0.8));
-              rs();
-            };
-            video.addEventListener("seeked", onSeek);
-            video.currentTime = seek;
-          });
-        } catch { /* skip failed frame */ }
-      }
+    const canvas = document.createElement("canvas");
+    const ctx = canvas.getContext("2d");
+    if (!ctx) throw new Error("无法创建画布");
 
-      URL.revokeObjectURL(url);
-      resolve(frames);
+    canvas.width = 320;
+    canvas.height = 240;
+    const step = duration / (count + 1);
+    const frames: string[] = [];
+
+    const capture = () => {
+      ctx.drawImage(video, 0, 0, 320, 240);
+      return canvas.toDataURL("image/jpeg", 0.5);
     };
 
-    video.onerror = () => { URL.revokeObjectURL(url); reject(new Error("Video load error")); };
-    video.src = url;
-  });
+    for (let i = 1; i <= count && frames.length < count; i++) {
+      try {
+        await new Promise<void>((rs) => {
+          const t = setTimeout(() => { video.removeEventListener("seeked", onS); rs(); }, 3000);
+          const onS = () => { clearTimeout(t); rs(); };
+          video.addEventListener("seeked", onS, { once: true });
+          video.currentTime = step * i;
+        });
+        frames.push(capture());
+      } catch { continue; }
+    }
+
+    return frames;
+  } finally {
+    URL.revokeObjectURL(url);
+    video.removeAttribute("src");
+    if (video.parentNode) video.parentNode.removeChild(video);
+  }
 }
