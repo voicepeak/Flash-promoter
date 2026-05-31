@@ -1,7 +1,7 @@
 {
   "name": "flash-promoter",
   "private": true,
-  "version": "0.1.0",
+  "version": "1.0.0",
   "type": "module",
   "workspaces": [
     "apps/*",
@@ -11,7 +11,9 @@
     "dev": "concurrently -n api,desktop -c green,blue \"npm run dev:api\" \"npm run dev:desktop\"",
     "dev:api": "tsx apps/local-api/src/server.ts",
     "dev:desktop": "npm run dev --workspace @flash-promoter/desktop",
+    "dev:electron": "npm run dev:electron --workspace @flash-promoter/desktop",
     "build": "npm run build --workspaces",
+    "build:electron": "npm run build --workspace @flash-promoter/desktop && npm run build:electron --workspace @flash-promoter/desktop",
     "typecheck": "npm run typecheck --workspaces",
     "test:acceptance": "node scripts/acceptance-test.mjs"
   },
@@ -21,6 +23,7 @@
   "devDependencies": {
     "@types/node": "^24.10.1",
     "concurrently": "^10.0.0",
+    "esbuild": "^0.25.0",
     "typescript": "^5.9.3"
   }
 }

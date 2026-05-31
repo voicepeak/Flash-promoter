@@ -11,3 +11,5 @@ data/
 *.log
 .agents/
 skills-lock.json
+release/
+apps/desktop/electron/api-bundle.js

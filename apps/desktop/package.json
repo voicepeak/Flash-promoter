@@ -1,16 +1,22 @@
 {
   "name": "@flash-promoter/desktop",
   "private": true,
-  "version": "0.1.0",
+  "version": "1.0.0",
   "type": "module",
+  "description": "Flash Promoter — write once, publish everywhere",
+  "author": "flash-promoter",
+  "main": "electron/main.js",
   "scripts": {
     "dev": "vite --host 127.0.0.1",
+    "dev:electron": "node ../../scripts/dev-electron.mjs",
     "build": "tsc -p tsconfig.json && vite build",
+    "build:api": "node ../../scripts/build-api.mjs",
+    "build:electron": "npm run build && npm run build:api && electron-builder",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "preview": "vite preview --host 127.0.0.1"
   },
   "dependencies": {
-    "@flash-promoter/core": "0.1.0",
+    "@flash-promoter/core": "1.0.0",
     "@vitejs/plugin-react": "^5.1.1",
     "vite": "^7.2.4",
     "react": "^19.2.0",
@@ -22,6 +28,39 @@
     "@types/node": "^24.10.1",
     "@types/react": "^19.2.7",
     "@types/react-dom": "^19.2.3",
+    "electron": "35.7.5",
+    "electron-builder": "^26.0.12",
     "typescript": "^5.9.3"
+  },
+  "build": {
+    "appId": "com.flash-promoter.app",
+    "productName": "Flash Promoter",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "electron/**/*",
+      "package.json"
+    ],
+    "extraResources": [],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": ["x64"]
+        }
+      ],
+      "icon": "public/favicon.png"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "shortcutName": "Flash Promoter"
+    },
+    "asar": true,
+    "asarUnpack": []
   }
 }
