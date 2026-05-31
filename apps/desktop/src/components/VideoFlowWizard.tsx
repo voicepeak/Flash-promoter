@@ -270,10 +270,10 @@ async function extractVideoFrames(file: File, count: number): Promise<string[]> 
           await new Promise<void>((rs, rj) => {
             const onSeek = () => {
               video.removeEventListener("seeked", onSeek);
-          canvas.width = video.videoWidth || 640;
-          canvas.height = video.videoHeight || 360;
+          canvas.width = video.videoWidth || 480;
+          canvas.height = video.videoHeight || 270;
           ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-          frames.push(canvas.toDataURL("image/jpeg", 0.8));
+          frames.push(canvas.toDataURL("image/jpeg", 0.6));
               rs();
             };
             video.addEventListener("seeked", onSeek);
