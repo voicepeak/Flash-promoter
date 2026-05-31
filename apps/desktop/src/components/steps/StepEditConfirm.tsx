@@ -1,8 +1,6 @@
 import type { PlatformDraft, PlatformDraftUpdate, PlatformId } from "@flash-promoter/core";
-import { platformLabels } from "@flash-promoter/core";
+import { platformLabels, renderPlatformDraft } from "@flash-promoter/core";
 import { ArrowLeft, ArrowRight, CheckCircle2, Save } from "lucide-react";
-import { marked } from "marked";
-import { sanitizeHtml } from "../html.js";
 import { api } from "../../api/client.js";
 import { AiFieldButton } from "../AiFieldButton.js";
 
@@ -132,18 +130,10 @@ export function StepEditConfirm(props: Props) {
 import { useState } from "react";
 
 function DraftPreview({ draft }: { draft: PlatformDraft }) {
-  const body = typeof draft.body === "string" ? draft.body : JSON.stringify(draft.body);
-  const html = sanitizeHtml(marked.parse(body, { async: false }) as string);
+  const html = renderPlatformDraft(draft, { target: "preview" }).previewHtml;
   return (
     <div style={{ padding: 20 }}>
-      <h1 style={{ fontSize: 24, margin: "0 0 8px" }}>{draft.title}</h1>
-      {draft.summary ? <p style={{ color: "var(--muted)", marginBottom: 12 }}>{draft.summary}</p> : null}
       <div dangerouslySetInnerHTML={{ __html: html }} />
-      {draft.tags?.length ? (
-        <div className="tag-list" style={{ marginTop: 12 }}>
-          {draft.tags.map((t) => <span key={t}>{t}</span>)}
-        </div>
-      ) : null}
     </div>
   );
 }

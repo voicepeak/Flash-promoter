@@ -1,6 +1,7 @@
 export * from "./models.js";
 export * from "./canonical/parser.js";
 export * from "./render/markdown.js";
+export * from "./render/platform.js";
 export * from "./validation/common.js";
 export * from "./ai/local.js";
 export * from "./ai/llm.js";

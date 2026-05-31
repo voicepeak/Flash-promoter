@@ -52,12 +52,12 @@ ${"这是一篇用于验证本地 MVP 闭环的文章，覆盖统一内容模型
   });
   assert(created.id && created.post?.body?.length > 0, "create CanonicalPost");
 
-  // Test 6 adapters (mock, wechat, bilibili, zhihu-assist, xhs-assist, wordpress)
+  // Test current domestic adapters plus mock
   const generated = await post(`/posts/${created.id}/generate`, {
-    platforms: ["mock", "wechat", "bilibili", "zhihu-assist", "xhs-assist", "wordpress"],
+    platforms: ["mock", "wechat", "bilibili", "zhihu-assist", "xhs-assist"],
     style: "balanced"
   });
-  assert(generated.items?.length === 6, "generate 6 platform drafts (incl. WordPress)");
+  assert(generated.items?.length === 5, "generate 5 platform drafts");
   assert(Boolean(generated.adaptation?.wechat?.bodyMarkdown), "structured adaptation JSON");
 
   for (const draft of generated.items) {
@@ -89,8 +89,7 @@ ${"这是一篇用于验证本地 MVP 闭环的文章，覆盖统一内容模型
     const expectedDefaults = new Map([
       ["bilibili", "simulated"],
       ["zhihu-assist", "assist_opened"],
-      ["xhs-assist", "assist_opened"],
-      ["wordpress", "draft_created"]
+      ["xhs-assist", "assist_opened"]
     ]);
     assert(result.status === expectedDefaults.get(draft.platform), `default mode ${draft.platform}`);
     if (draft.platform.endsWith("-assist")) {
@@ -113,23 +112,15 @@ ${"这是一篇用于验证本地 MVP 闭环的文章，覆盖统一内容模型
   }
   pass("copy mode for assist platforms");
 
-  // WordPress draft mode test
-  const wp = findDraft(generated.items, "wordpress");
-  await put(`/drafts/${wp.id}`, { userConfirmed: true });
-  const wpDraft = await post(`/drafts/${wp.id}/publish`, { mode: "draft" });
-  assert(wpDraft.status === "draft_created", "wordpress draft_created");
-
   // Verify publish jobs and logs
   const jobs = await get("/publish-jobs");
   const logs = await get("/publish-logs");
-  assert(jobs.jobs.length >= 14, `publish jobs written (${jobs.jobs.length})`);
-  assert(logs.logs.length >= 14, `publish logs written (${logs.logs.length})`);
+  assert(jobs.jobs.length >= 11, `publish jobs written (${jobs.jobs.length})`);
+  assert(logs.logs.length >= 11, `publish logs written (${logs.logs.length})`);
 
-  // Verify WordPress adapter exists in registry
+  // Verify WordPress has been removed from the active registry.
   const adapters = await get("/adapters");
-  const wpAdapter = adapters.adapters.find((a) => a.id === "wordpress");
-  assert(!!wpAdapter, "WordPress adapter registered");
-  assert(wpAdapter.capabilities.supportsDraft === true, "WordPress supports draft");
+  assert(!adapters.adapters.some((a) => a.id === "wordpress"), "WordPress adapter not registered");
 }
 
 function findDraft(drafts, platform) {

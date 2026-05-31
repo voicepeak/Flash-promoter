@@ -139,6 +139,7 @@ export const api = {
   // Safety
   getSafety: () => request<{ realPublishEnabled: boolean; platformSwitches: Record<string, boolean>; platformGuides: Array<{ id: string; name: string; authType: string; setupNote: string; setupUrl: string; docs: string[]; publishLevels: string[]; riskLevel: string; defaultMode: string }> }>("/settings/safety"),
   saveSafety: (body: { realPublishEnabled?: boolean; platformSwitches?: Record<string, boolean> }) => request<{ ok: boolean }>("/settings/safety", { method: "POST", body: JSON.stringify(body) }),
+  storageInfo: () => request<{ dbPath: string }>("/settings/storage"),
 
   // Platform Credentials
   getPlatformAccounts: () => request<{ accounts: Array<{ id: string; platform: string; displayName: string; authType: string; status: string; scopes: string[]; encryptedCredentials: string; createdAt: number }> }>("/platform-accounts"),

@@ -9,7 +9,7 @@ import { StepEditConfirm } from "./steps/StepEditConfirm.js";
 import { StepValidatePublish } from "./steps/StepValidatePublish.js";
 import { StepResults } from "./steps/StepResults.js";
 
-const userPlatforms: PlatformId[] = ["wechat", "bilibili", "zhihu-assist", "xhs-assist", "wordpress"];
+const userPlatforms: PlatformId[] = ["wechat", "bilibili", "zhihu-assist", "xhs-assist"];
 const steps = ["输入原稿", "选择平台", "生成内容包", "编辑确认", "发布", "完成"];
 
 type ImageItem = { id: string; dataUrl: string; filename: string; source: "upload" | "ai" };
@@ -40,7 +40,7 @@ export function ArticleFlowWizard() {
       let llmAvailable = false;
       try {
         const cfg = await api.getLlmConfig();
-        const hasKey = cfg?.config?.apiKeyEncrypted && !cfg.config.apiKeyEncrypted.includes("****");
+        const hasKey = !!cfg?.config?.apiKeyEncrypted;
         llmAvailable = !!(cfg?.config?.enabled && hasKey);
       } catch { llmAvailable = false; }
 

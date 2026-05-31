@@ -25,17 +25,6 @@ const platformFieldMappings: Record<string, FieldMapping> = {
       { slotKey: "tags", platformField: "tags", required: false, maxLength: 8 }
     ]
   },
-  "wordpress-post": {
-    packageType: "wordpress-post",
-    platform: "wordpress",
-    slots: [
-      { slotKey: "title", platformField: "title", required: true },
-      { slotKey: "body", platformField: "content", required: true },
-      { slotKey: "summary", platformField: "excerpt", required: false, maxLength: 300 },
-      { slotKey: "tags", platformField: "tags", required: false },
-      { slotKey: "categories", platformField: "categories", required: false }
-    ]
-  },
   "xhs-note": {
     packageType: "xhs-note",
     platform: "xhs-assist",

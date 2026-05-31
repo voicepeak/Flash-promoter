@@ -4,6 +4,7 @@ import { createId, now } from "../models.js";
 import { generateStructuredPlatformAdaptation } from "../ai/local.js";
 import { platformManifests } from "./manifests.js";
 import { createDraftBase, enforceNoDirectPublish, isPlatformRealPublishEnabled, performDryRun, simulatedResult, validateWithLimits } from "./common.js";
+import { renderPlatformDraft } from "../render/platform.js";
 
 async function getAccessToken(cred: Record<string, string>): Promise<{ token: string } | { error: string }> {
   try {
@@ -97,31 +98,6 @@ function parseCred(account: PlatformAccount): Record<string, string> | null {
   try { return account.encryptedCredentials ? JSON.parse(account.encryptedCredentials) as Record<string, string> : null; } catch { return null; }
 }
 
-function bodyToHtml(draft: PlatformDraft, imageUrls: Map<string, string>): string {
-  let html = "";
-  if (typeof draft.body === "string") {
-    html = draft.body.replace(/\n/g, "<br>");
-  } else {
-    const parts: string[] = [];
-    for (const b of draft.body) {
-      if (b.type === "image") {
-        const url = imageUrls.get(b.assetId);
-        if (url) {
-          parts.push(`<img src="${url}"${b.caption ? ` alt="${b.caption}"` : ""} />`);
-        }
-      } else if (b.type === "divider") {
-        parts.push("<hr>");
-      } else if ("text" in b) {
-        parts.push(b.text);
-      } else if (b.type === "code") {
-        parts.push(`<pre><code>${b.code}</code></pre>`);
-      }
-    }
-    html = parts.join("\n");
-  }
-  return `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>${draft.title}</title></head><body>${html.replace(/\n/g, "<br>")}</body></html>`;
-}
-
 function findImageAssets(draft: PlatformDraft): Asset[] {
   return (draft.assets ?? []).filter((a) => a.type === "image" && (a.dataUrl || a.localPath));
 }
@@ -187,8 +163,11 @@ export const wechatAdapter: PlatformAdapter = {
       if ("mediaId" in fallback) thumbMediaId = fallback.mediaId;
     }
 
-    // Build draft HTML with inline image URLs
-    const content = bodyToHtml(draft, imageUrls);
+    // Build the exact WeChat HTML payload used by preview and publish.
+    const content = renderPlatformDraft(draft, {
+      target: "publish",
+      assetUrl: (assetId) => imageUrls.get(assetId)
+    }).bodyHtml;
     const article: Record<string, unknown> = {
       title: draft.title,
       content,

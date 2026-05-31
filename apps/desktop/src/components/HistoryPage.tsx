@@ -4,6 +4,8 @@ import type { CanonicalPost, PlatformDraft, PublishJob, PublishLog } from "@flas
 import { platformLabels } from "@flash-promoter/core";
 import { api } from "../api/client.js";
 
+const activeHistoryPlatforms = new Set(["mock", "wechat", "bilibili", "zhihu-assist", "xhs-assist"]);
+
 export function HistoryPage() {
   const [posts, setPosts] = useState<Array<CanonicalPost & { status: string }>>([]);
   const [jobs, setJobs] = useState<PublishJob[]>([]);
@@ -17,13 +19,16 @@ export function HistoryPage() {
   async function load() {
     const [p, j, l] = await Promise.all([api.posts(), api.jobs(), api.logs()]);
     setPosts(p.posts);
-    setJobs(j.jobs);
-    setLogs(l.logs);
+    setJobs(j.jobs.filter((job) => activeHistoryPlatforms.has(job.platform)));
+    setLogs(l.logs.filter((log) => activeHistoryPlatforms.has(log.platform)));
   }
 
   async function loadPostDrafts(postId: string) {
     setViewPost(postId);
-    try { const result = await api.post(postId); setDrafts(result.drafts); } catch { setDrafts([]); }
+    try {
+      const result = await api.post(postId);
+      setDrafts(result.drafts.filter((draft) => activeHistoryPlatforms.has(draft.platform)));
+    } catch { setDrafts([]); }
   }
 
   const filteredPosts = filter === "all" ? posts : posts.filter((p) => {

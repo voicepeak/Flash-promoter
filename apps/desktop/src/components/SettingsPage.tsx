@@ -3,7 +3,7 @@ import { AlertTriangle, Brain, CheckCircle2, ChevronDown, ChevronRight, Database
 import { type PlatformId, type LlmConfig, type LlmModelCapabilities } from "@flash-promoter/core";
 import { api } from "../api/client.js";
 
-const p0Platforms: PlatformId[] = ["wechat", "bilibili", "zhihu-assist", "xhs-assist", "wordpress"];
+const p0Platforms: PlatformId[] = ["wechat", "bilibili", "zhihu-assist", "xhs-assist"];
 
 type PlatformGuide = { id: string; name: string; authType: string; setupNote: string; setupUrl: string; docs: string[]; publishLevels: string[]; riskLevel: string; defaultMode: string };
 
@@ -36,22 +36,6 @@ const setupGuides: Record<string, { title: string; steps: string[]; fields: { ke
       { key: "clientId", label: "client_id", placeholder: "xxxxxxxx" },
       { key: "clientSecret", label: "client_secret", placeholder: "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" }
     ]
-  },
-  wordpress: {
-    title: "WordPress Application Password",
-    steps: [
-      "1. 登录 WordPress 后台（你的站点/wp-admin）",
-      "2. 进入「用户」→「个人资料」",
-      "3. 滚动到「Application Passwords」区域",
-      "4. 输入应用名称（如 flash-promoter），点击「添加新的 Application Password」",
-      "5. 复制生成的密码（只显示一次）",
-      "6. 将站点地址和密码填入下方，点击保存"
-    ],
-    fields: [
-      { key: "siteUrl", label: "站点地址", placeholder: "https://your-site.com" },
-      { key: "username", label: "用户名", placeholder: "admin" },
-      { key: "appPassword", label: "Application Password", placeholder: "xxxx xxxx xxxx xxxx xxxx xxxx" }
-    ]
   }
 };
 
@@ -75,11 +59,13 @@ export function SettingsPage() {
   const [testResult, setTestResult] = useState<"ok" | "fail" | null>(null);
   const [savingLlm, setSavingLlm] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [storagePath, setStoragePath] = useState("data/flash-promoter.sqlite");
 
   useEffect(() => {
     api.getLlmConfig().then((r) => { if (r.config.baseUrl) { const keyFromServer = r.config.apiKeyEncrypted ?? ""; const imgKeyFromServer = (r.config as Record<string, unknown>).imageApiKey as string ?? ""; setHasStoredKey(!!keyFromServer); setHasStoredImageKey(!!imgKeyFromServer); setLlmForm({ enabled: r.config.enabled, baseUrl: r.config.baseUrl, apiKeyEncrypted: "", model: r.config.model, temperature: r.config.temperature, timeoutMs: r.config.timeoutMs, maxTokens: r.config.maxTokens ?? 4096, imageBaseUrl: (r.config as Record<string, unknown>).imageBaseUrl as string ?? "", imageApiKey: "", imageModel: (r.config as Record<string, unknown>).imageModel as string ?? "dall-e-3", capabilities: r.config.capabilities }); } }).catch(() => {});
     api.getSafety().then((r) => { setGlobalSafety(r.realPublishEnabled); setPlatformSwitches(r.platformSwitches); setGuides(r.platformGuides.filter((g) => p0Platforms.includes(g.id as PlatformId))); }).catch(() => {});
     api.getPlatformAccounts().then((r) => setAccounts(r.accounts)).catch(() => {});
+    api.storageInfo().then((r) => setStoragePath(r.dbPath || "data/flash-promoter.sqlite")).catch(() => {});
   }, []);
 
   async function saveLlm() { setSavingLlm(true); setSaveError(null); try { await api.saveLlmConfig(llmForm); setTestResult(null); if (llmForm.apiKeyEncrypted) setHasStoredKey(true); if (llmForm.imageApiKey) setHasStoredImageKey(true); } catch (e) { setSaveError(e instanceof Error ? e.message : "保存失败"); } finally { setSavingLlm(false); } }
@@ -240,7 +226,7 @@ export function SettingsPage() {
       </section>
 
       {/* === Storage + Debug === */}
-      <section className="card"><h2><Database size={16} /> 本地存储</h2><div className="settings-table"><div className="settings-row"><span>数据位置</span><span>data/flash-promoter.sqlite</span></div></div></section>
+      <section className="card"><h2><Database size={16} /> 本地存储</h2><div className="settings-table"><div className="settings-row"><span>数据位置</span><span>{storagePath}</span></div></div></section>
       <section className="card"><h2><Terminal size={16} /> 调试</h2><button type="button" onClick={() => setShowDebug(!showDebug)}>{showDebug ? "关闭" : "开启"}</button>{showDebug && <div style={{ marginTop: 14, padding: 12, border: "1px dashed var(--line)", borderRadius: 8 }}><p className="muted">本地 MVP | API :3333 | 桌面 :5173</p></div>}</section>
     </div>
   );

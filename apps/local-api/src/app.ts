@@ -32,7 +32,7 @@ import {
 import { FlashPromoterRepository } from "@flash-promoter/storage";
 
 const platformIdSchema = z.enum([
-  "mock", "wechat", "bilibili", "zhihu-assist", "xhs-assist", "wordpress",
+  "mock", "wechat", "bilibili", "zhihu-assist", "xhs-assist",
   "douyin", "kuaishou", "youtube", "instagram", "threads", "facebook-pages", "x-twitter", "linkedin",
   "pinterest", "reddit", "medium", "mastodon", "bluesky", "telegram-channel", "discord", "ghost",
   "toutiao", "baijiahao", "csdn", "juejin", "jianshu", "douban", "notion"
@@ -73,7 +73,7 @@ const createPostSchema = z.object({
 });
 
 const generateSchema = z.object({
-  platforms: z.array(platformIdSchema).default(["wechat", "bilibili", "zhihu-assist", "xhs-assist", "wordpress"]),
+  platforms: z.array(platformIdSchema).default(["wechat", "bilibili", "zhihu-assist", "xhs-assist"]),
   style: z.literal("balanced").default("balanced")
 });
 
@@ -92,7 +92,7 @@ const updateDraftSchema = z.object({
   userConfirmed: z.boolean().optional()
 });
 
-export function createApp(repository: FlashPromoterRepository) {
+export function createApp(repository: FlashPromoterRepository, options: { dbPath?: string } = {}) {
   // Restore persisted safety state on startup
   try {
     const sp = repository.getPost("safety_config");
@@ -115,6 +115,10 @@ export function createApp(repository: FlashPromoterRepository) {
     ok: true,
     name: "flash-promoter",
     adapters: adapterRegistry.list().map((adapter) => adapter.manifest.id)
+  }));
+
+  app.get("/api/settings/storage", async () => ({
+    dbPath: options.dbPath ?? ""
   }));
 
   app.get("/api/adapters", async () => ({
@@ -607,19 +611,21 @@ export function createApp(repository: FlashPromoterRepository) {
   app.get("/api/settings/llm", async () => {
     const post = repository.getPost(llmConfigKey);
     if (!post) return { config: createLlmConfig() };
-    const raw = JSON.parse((post.body?.[0] as { text?: string } | undefined)?.text ?? "{}") as LlmConfig;
-    return { config: { ...raw, apiKeyEncrypted: maskKey(raw.apiKeyEncrypted) } };
+    const raw = parseStoredLlmConfig(post);
+    return { config: maskLlmConfig(raw) };
   });
 
   app.post("/api/settings/llm", async (request, reply) => {
     const body = request.body as Record<string, unknown>;
     const incomingKey = String(body.apiKeyEncrypted ?? "");
+    const incomingImageKey = String(body.imageApiKey ?? "");
     const existing = repository.getPost(llmConfigKey);
-    const storedKey = existing
-      ? (JSON.parse((existing.body?.[0] as { text?: string } | undefined)?.text ?? "{}") as LlmConfig).apiKeyEncrypted ?? ""
-      : "";
+    const stored = existing ? parseStoredLlmConfig(existing) : null;
+    const storedKey = stored?.apiKeyEncrypted ?? "";
+    const storedImageKey = stored?.imageApiKey ?? "";
     // If the client sent a masked key (contains ****) or empty, keep the real stored key
-    const keyToSave = (incomingKey && !incomingKey.includes("****")) ? incomingKey : storedKey;
+    const keyToSave = isNewSecret(incomingKey) ? incomingKey : storedKey;
+    const imageKeyToSave = isNewSecret(incomingImageKey) ? incomingImageKey : storedImageKey;
     const config = createLlmConfig({
       enabled: Boolean(body.enabled),
       provider: String(body.provider ?? "openai-compatible"),
@@ -629,7 +635,11 @@ export function createApp(repository: FlashPromoterRepository) {
       temperature: Number(body.temperature ?? 0.7),
       timeoutMs: Number(body.timeoutMs ?? 30000),
       maxTokens: body.maxTokens ? Number(body.maxTokens) : undefined,
+      imageBaseUrl: String(body.imageBaseUrl ?? stored?.imageBaseUrl ?? ""),
+      imageApiKey: imageKeyToSave,
+      imageModel: String(body.imageModel ?? stored?.imageModel ?? "dall-e-3"),
       capabilities: (body.capabilities as LlmConfig["capabilities"]) ?? { text: true, image: false, videoFrame: false, structuredOutput: true, longContext: true },
+      createdAt: stored?.createdAt ?? Date.now(),
       updatedAt: Date.now()
     });
     if (existing) {
@@ -643,18 +653,27 @@ export function createApp(repository: FlashPromoterRepository) {
         createdAt: Date.now(), updatedAt: Date.now()
       });
     }
-    return { ok: true, config: { ...config, apiKeyEncrypted: maskKey(config.apiKeyEncrypted) } };
+    return { ok: true, config: maskLlmConfig(config) };
   });
 
   app.post("/api/settings/llm/test", async (request, reply) => {
     const body = request.body as Record<string, unknown>;
+    const existing = repository.getPost(llmConfigKey);
+    const stored = existing ? parseStoredLlmConfig(existing) : createLlmConfig();
+    const incomingKey = String(body.apiKeyEncrypted ?? "");
+    const apiKey = isNewSecret(incomingKey) ? incomingKey : stored.apiKeyEncrypted;
+    const baseUrl = String(body.baseUrl ?? stored.baseUrl ?? "").replace(/\/$/, "");
+    const model = String(body.model ?? stored.model ?? "gpt-4o");
+    if (!apiKey) {
+      return reply.code(400).send({ ok: false, error: "API Key 未配置" });
+    }
     try {
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), 10000);
-      const res = await fetch(`${String(body.baseUrl)}/chat/completions`, {
+      const res = await fetch(`${baseUrl}/chat/completions`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${String(body.apiKeyEncrypted)}` },
-        body: JSON.stringify({ model: String(body.model), messages: [{ role: "user", content: "Hello" }], max_tokens: 5 }),
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
+        body: JSON.stringify({ model, messages: [{ role: "user", content: "Hello" }], max_tokens: 5 }),
         signal: controller.signal
       });
       clearTimeout(timer);
@@ -847,7 +866,7 @@ function accountFor(platform: PlatformId, credStore: FlashPromoterRepository): P
     id: `local-${platform}`,
     platform,
     displayName: platform,
-    authType: platform === "mock" ? "mock" : platform === "wordpress" ? "app-secret" : platform === "wechat" ? "app-secret" : "none",
+    authType: platform === "mock" ? "mock" : platform === "wechat" ? "app-secret" : "none",
     encryptedCredentials: credentials,
     scopes: [],
     status: "active",
@@ -859,4 +878,26 @@ function accountFor(platform: PlatformId, credStore: FlashPromoterRepository): P
 function maskKey(key: string): string {
   if (!key || key.length < 8) return key;
   return key.slice(0, 4) + "****" + key.slice(-4);
+}
+
+function parseStoredLlmConfig(post: { body?: unknown }): LlmConfig {
+  try {
+    const body = Array.isArray(post.body) ? post.body : [];
+    const first = body[0] as { text?: string } | undefined;
+    return createLlmConfig(JSON.parse(first?.text ?? "{}") as Partial<LlmConfig>);
+  } catch {
+    return createLlmConfig();
+  }
+}
+
+function maskLlmConfig(config: LlmConfig): LlmConfig {
+  return {
+    ...config,
+    apiKeyEncrypted: maskKey(config.apiKeyEncrypted),
+    imageApiKey: config.imageApiKey ? maskKey(config.imageApiKey) : config.imageApiKey
+  };
+}
+
+function isNewSecret(value: string): boolean {
+  return Boolean(value && !value.includes("****"));
 }
