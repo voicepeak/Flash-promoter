@@ -9,68 +9,118 @@ const API_HOST = process.env.FLASH_PROMOTER_API_HOST || "127.0.0.1";
 const isDev = !app.isPackaged;
 const isWin = process.platform === "win32";
 
+const MIN_NODE_MAJOR = 24;
 let apiProcess = null;
 let mainWindow = null;
+let apiStderr = "";
 
-function findSystemNode() {
+function tryNodeVersion(nodePath) {
   try {
-    const nodeExe = isWin ? "node.exe" : "node";
-    const result = execSync(`"${nodeExe}" --version`, { encoding: "utf8", timeout: 5000 });
-    const version = result.trim().replace(/^v/, "");
-    const major = parseInt(version.split(".")[0], 10);
-    if (major >= 24) return nodeExe;
-    return null;
+    const ver = execSync(`"${nodePath}" --version`, { encoding: "utf8", timeout: 10000 }).trim();
+    const major = parseInt(ver.replace(/^v/, "").split(".")[0], 10);
+    return { path: nodePath, version: ver, major };
   } catch {
     return null;
   }
 }
 
-function findNodePath() {
+function findNode() {
+  const candidates = [];
+
+  // 1. where/which
   try {
-    const whichCmd = isWin ? "where" : "which";
-    const result = execSync(`${whichCmd} node`, { encoding: "utf8", timeout: 5000 });
-    const lines = result.trim().split(/\r?\n/);
-    for (const line of lines) {
-      const nodePath = line.trim();
-      try {
-        const ver = execSync(`"${nodePath}" --version`, { encoding: "utf8", timeout: 5000 }).trim();
-        const major = parseInt(ver.replace(/^v/, "").split(".")[0], 10);
-        if (major >= 24) return nodePath;
-      } catch {
-        // skip
+    const cmd = isWin ? "where node" : "which node";
+    const output = execSync(cmd, { encoding: "utf8", timeout: 10000 });
+    output.trim().split(/\r?\n/).map(s => s.trim()).filter(Boolean).forEach(p => candidates.push(p));
+  } catch { /* ignore */ }
+
+  // 2. Hardcoded common install paths
+  if (isWin) {
+    const drives = ["C:", "D:"];
+    const suffixes = [
+      "Program Files\\nodejs\\node.exe",
+      "Program Files (x86)\\nodejs\\node.exe",
+    ];
+    for (const drive of drives) {
+      for (const suffix of suffixes) {
+        candidates.push(path.join(drive, suffix));
       }
     }
-    return null;
-  } catch {
-    return null;
+
+    // nvm-windows
+    const nvmHome = process.env.NVM_HOME || process.env.NVM_SYMLINK;
+    if (nvmHome) {
+      candidates.push(path.join(nvmHome, "node.exe"));
+    }
+
+    // fnm
+    const fnmDir = process.env.FNM_DIR;
+    if (fnmDir) {
+      try {
+        const files = fs.readdirSync(fnmDir, { withFileTypes: true });
+        for (const f of files) {
+          if (f.isDirectory() && /^v?\d+\.\d+\.\d+$/.test(f.name)) {
+            candidates.push(path.join(fnmDir, f.name, "installation", "node.exe"));
+          }
+        }
+      } catch { /* ignore */ }
+    }
+
+    // VOLTA
+    const voltaHome = process.env.VOLTA_HOME;
+    if (voltaHome) {
+      candidates.push(path.join(voltaHome, "node.exe"));
+    }
   }
+
+  // 3. bare "node" (from PATH)
+  candidates.push(isWin ? "node.exe" : "node");
+
+  console.log("[electron] Searching for Node.js >= %d, checking candidates:", MIN_NODE_MAJOR);
+  let firstVersion = null;
+  for (const p of candidates) {
+    const info = tryNodeVersion(p);
+    if (!info) continue;
+    if (!firstVersion) firstVersion = info;
+    console.log("[electron]   %s -> %s (major=%d)", info.path, info.version, info.major);
+    if (info.major >= MIN_NODE_MAJOR) {
+      console.log("[electron] Selected: %s (%s)", info.path, info.version);
+      return info.path;
+    }
+  }
+
+  // No suitable version found
+  const detail = firstVersion
+    ? `检测到 Node.js ${firstVersion.version}（路径: ${firstVersion.path}），但本项目需要 Node.js >= ${MIN_NODE_MAJOR}。`
+    : `未在系统中找到 Node.js。请安装 Node.js ${MIN_NODE_MAJOR} 或更新版本。`;
+  dialog.showErrorBox("Node.js 版本不足", `${detail}\n\n下载地址: https://nodejs.org`);
+  app.quit();
+  return null;
 }
 
 function startApiServer() {
   if (isDev) {
     console.log("[electron] Dev mode — API server must be started separately (npm run dev:api)");
-    return;
+    return true;
   }
 
-  const nodePath = findNodePath() || findSystemNode();
-
-  if (!nodePath) {
-    dialog.showErrorBox(
-      "Node.js 未找到",
-      "Flash Promoter 需要 Node.js >= 24 才能运行。\n\n请从 https://nodejs.org 下载安装 Node.js 24 或更新版本。"
-    );
-    app.quit();
-    return;
-  }
+  const nodePath = findNode();
+  if (!nodePath) return false;
 
   const apiBundlePath = path.join(__dirname, "api-bundle.js");
   if (!fs.existsSync(apiBundlePath)) {
-    dialog.showErrorBox("启动失败", `找不到 API 服务文件: ${apiBundlePath}`);
+    dialog.showErrorBox("启动失败", `找不到 API 服务文件:\n${apiBundlePath}`);
     app.quit();
-    return;
+    return false;
   }
 
-  apiProcess = spawn(nodePath, [apiBundlePath], {
+  apiStderr = "";
+
+  // Use shell:true so paths with spaces (e.g. Program Files) work
+  const cmd = `"${nodePath}" "${apiBundlePath}"`;
+  console.log("[electron] Spawning API: %s", cmd);
+
+  apiProcess = spawn(cmd, [], {
     env: {
       ...process.env,
       FLASH_PROMOTER_API_PORT: String(API_PORT),
@@ -78,20 +128,35 @@ function startApiServer() {
       FLASH_PROMOTER_DATA_DIR: path.join(app.getPath("userData"), "data"),
     },
     stdio: ["pipe", "pipe", "pipe"],
+    shell: true,
+    windowsHide: true,
   });
 
   apiProcess.stdout.on("data", (data) => {
-    process.stdout.write(`[api] ${data}`);
+    const msg = data.toString();
+    process.stdout.write(`[api] ${msg}`);
   });
 
   apiProcess.stderr.on("data", (data) => {
-    process.stderr.write(`[api:err] ${data}`);
+    const msg = data.toString();
+    process.stderr.write(`[api:err] ${msg}`);
+    apiStderr += msg;
   });
 
-  apiProcess.on("exit", (code) => {
-    console.log(`[electron] API server exited with code ${code}`);
+  apiProcess.on("error", (err) => {
+    console.error("[electron] Failed to spawn API process:", err.message);
+    apiStderr += `SPAWN ERROR: ${err.message}\n`;
+  });
+
+  apiProcess.on("exit", (code, signal) => {
+    console.log(`[electron] API server exited code=${code} signal=${signal}`);
+    if (code !== 0 && code !== null) {
+      apiStderr += `EXIT CODE: ${code}\n`;
+    }
     apiProcess = null;
   });
+
+  return true;
 }
 
 function waitForApi(maxRetries = 60) {
@@ -102,30 +167,32 @@ function waitForApi(maxRetries = 60) {
     const check = () => {
       retries++;
       const req = http.get(`http://${API_HOST}:${API_PORT}/api/health`, (res) => {
+        res.resume();
         if (res.statusCode === 200) {
           console.log("[electron] API server is ready");
           resolve();
         } else if (retries < maxRetries) {
           setTimeout(check, 500);
         } else {
-          reject(new Error("API server returned non-200 status"));
+          reject(new Error(`API 返回状态码 ${res.statusCode}，启动超时`));
         }
       });
-      req.on("error", () => {
+      req.on("error", (err) => {
         if (retries < maxRetries) {
           setTimeout(check, 500);
         } else {
-          reject(new Error("API server did not start in time"));
+          reject(new Error(`API 服务启动超时 (${err.code || err.message})`));
         }
       });
-      req.setTimeout(2000, () => {
+      req.setTimeout(3000, () => {
         req.destroy();
         if (retries < maxRetries) {
           setTimeout(check, 500);
         } else {
-          reject(new Error("API server health check timed out"));
+          reject(new Error("API 健康检查超时"));
         }
       });
+      req.end();
     };
     check();
   });
@@ -165,16 +232,20 @@ function createWindow() {
 }
 
 app.whenReady().then(async () => {
-  startApiServer();
+  const ok = startApiServer();
+  if (!ok) return;
 
   try {
     await waitForApi();
   } catch (err) {
     console.error("[electron] Failed to start API server:", err.message);
+    const stderrLines = apiStderr.trim().split(/\r?\n/).slice(-6).join("\n");
+    const details = stderrLines ? `\n\nAPI 服务输出:\n${stderrLines}` : "";
     dialog.showErrorBox(
       "启动失败",
-      `API 服务启动失败: ${err.message}\n\n请确保 Node.js >= 24 已正确安装。`
+      `${err.message}${details}\n\n请确认已安装 Node.js >= ${MIN_NODE_MAJOR}。\n下载地址: https://nodejs.org`
     );
+    if (apiProcess) { apiProcess.kill("SIGTERM"); apiProcess = null; }
     app.quit();
     return;
   }
@@ -187,23 +258,14 @@ app.whenReady().then(async () => {
 });
 
 app.on("window-all-closed", () => {
-  if (apiProcess) {
-    apiProcess.kill("SIGTERM");
-    apiProcess = null;
-  }
+  if (apiProcess) { apiProcess.kill("SIGTERM"); apiProcess = null; }
   if (process.platform !== "darwin") app.quit();
 });
 
 app.on("before-quit", () => {
-  if (apiProcess) {
-    apiProcess.kill("SIGTERM");
-    apiProcess = null;
-  }
+  if (apiProcess) { apiProcess.kill("SIGTERM"); apiProcess = null; }
 });
 
 app.on("quit", () => {
-  if (apiProcess) {
-    apiProcess.kill("SIGTERM");
-    apiProcess = null;
-  }
+  if (apiProcess) { apiProcess.kill("SIGTERM"); apiProcess = null; }
 });
