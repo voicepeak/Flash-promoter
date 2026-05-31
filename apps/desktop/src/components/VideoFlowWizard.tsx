@@ -1,5 +1,6 @@
-import { useState, useCallback } from "react";
-import type { PlatformDraft, PlatformId, PublishResult } from "@flash-promoter/core";
+import { useState, useCallback, useEffect } from "react";
+import type { CanonicalPost, PlatformDraft, PlatformId, PublishResult } from "@flash-promoter/core";
+import { blocksToMarkdown } from "@flash-promoter/core";
 import { api } from "../api/client.js";
 import { VideoInfoStep } from "./steps/VideoInfoStep.js";
 import { VideoPlatformSelectStep } from "./steps/VideoPlatformSelectStep.js";
@@ -7,10 +8,18 @@ import { VideoGenerateStep } from "./steps/VideoGenerateStep.js";
 import { VideoReviewStep } from "./steps/VideoReviewStep.js";
 import { VideoValidateStep } from "./steps/VideoValidateStep.js";
 import { VideoResultStep } from "./steps/VideoResultStep.js";
+import type { PublishResumeRequest } from "./FlowWizard.js";
 
 const videoSteps = ["上传视频", "选择平台", "生成发布包", "编辑确认", "发布前检查", "发布结果"];
 
-export function VideoFlowWizard() {
+const videoPlatforms: PlatformId[] = ["bilibili", "xhs-assist", "zhihu-assist", "wechat"];
+
+type Props = {
+  resumeRequest?: PublishResumeRequest | null;
+  onResumeConsumed?: () => void;
+};
+
+export function VideoFlowWizard(props: Props = {}) {
   const [step, setStep] = useState(0);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -31,6 +40,53 @@ export function VideoFlowWizard() {
   const [publishResults, setPublishResults] = useState<Record<string, PublishResult>>({});
 
   const showMessage = useCallback((msg: string) => { setMessage(msg); setTimeout(() => setMessage(null), 4000); }, []);
+
+  useEffect(() => {
+    const request = props.resumeRequest;
+    if (!request) return;
+    const postId = request.postId;
+
+    let cancelled = false;
+    async function resumePost() {
+      setBusy(true);
+      setMessage(null);
+      try {
+        const result = await api.post(postId);
+        if (cancelled) return;
+
+        const activeDrafts = result.drafts.filter((draft) => videoPlatforms.includes(draft.platform));
+        const platforms = activeDrafts.map((draft) => draft.platform);
+
+        hydrateVideoPost(result.post, {
+          setTitle,
+          setTopic,
+          setSummary,
+          setStyle,
+          setScript,
+          setTagsText,
+          setHighlightsText
+        });
+        setCurrentPostId(result.post.id);
+        setSelectedPlatforms(platforms.length > 0 ? platforms : ["bilibili", "xhs-assist"]);
+        setDrafts(activeDrafts);
+        setPublishResults({});
+        setStep(activeDrafts.length > 0 ? 3 : 1);
+        showMessage(activeDrafts.length > 0 ? "已载入历史视频，可继续编辑平台版本" : "已载入历史视频，请重新生成平台版本");
+      } catch (error) {
+        if (!cancelled) {
+          setMessage(error instanceof Error ? error.message : "载入历史视频失败");
+        }
+      } finally {
+        if (!cancelled) {
+          setBusy(false);
+          props.onResumeConsumed?.();
+        }
+      }
+    }
+
+    void resumePost();
+    return () => { cancelled = true; };
+  }, [props.resumeRequest?.requestId, showMessage]);
 
   function handleAnalyzed(t: string, tp: string, s: string, tags: string[], hl: string[], st: string, sc: string, tt: string) {
     setTitle(t); setTopic(tp); setSummary(s); setTagsText(tt); setHighlightsText(hl.join(", ")); setStyle(st); setScript(sc); setStep(1);
@@ -90,8 +146,31 @@ export function VideoFlowWizard() {
         {step === 2 && <VideoGenerateStep selectedPlatforms={selectedPlatforms} busy={busy} />}
         {step === 3 && <VideoReviewStep drafts={drafts} selectedPlatforms={selectedPlatforms} busy={busy} onDraftsChange={setDrafts} onBack={() => setStep(1)} onNext={async () => { setBusy(true); const ok = await handleValidateAll(); setBusy(false); ok ? setStep(4) : setMessage("部分平台校验未通过"); }} canNext={canNext} />}
         {step === 4 && <VideoValidateStep drafts={drafts} busy={busy} onBack={() => setStep(3)} onPublish={handlePublishAll} allValid={drafts.every((d) => d.validation?.ok === true)} />}
-        {step === 5 && <VideoResultStep drafts={drafts} results={publishResults} onBackToEdit={() => setStep(3)} onNewPost={() => { setStep(0); setVideoFile(null); setTitle(""); setTopic(""); setDrafts([]); setPublishResults({}); }} />}
+        {step === 5 && <VideoResultStep drafts={drafts} results={publishResults} onBackToEdit={() => setStep(3)} onNewPost={() => { setStep(0); setVideoFile(null); setTitle(""); setTopic(""); setSummary(""); setScript(""); setHighlightsText(""); setTagsText(""); setCurrentPostId(null); setDrafts([]); setPublishResults({}); }} />}
       </div>
     </div>
   );
+}
+
+type VideoHydrationSetters = {
+  setTitle: (value: string) => void;
+  setTopic: (value: string) => void;
+  setSummary: (value: string) => void;
+  setStyle: (value: string) => void;
+  setScript: (value: string) => void;
+  setTagsText: (value: string) => void;
+  setHighlightsText: (value: string) => void;
+};
+
+function hydrateVideoPost(post: CanonicalPost, setters: VideoHydrationSetters) {
+  const raw = post as CanonicalPost & Record<string, unknown>;
+  const highlights = Array.isArray(raw.highlights) ? raw.highlights.map(String) : [];
+
+  setters.setTitle(post.title);
+  setters.setTopic(String(raw.topic ?? post.summary ?? ""));
+  setters.setSummary(post.summary ?? "");
+  setters.setStyle(String(raw.style ?? "knowledge"));
+  setters.setScript(String(raw.script ?? blocksToMarkdown(post.body)));
+  setters.setTagsText(post.tags.join(", "));
+  setters.setHighlightsText(highlights.join(", "));
 }

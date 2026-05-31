@@ -1,6 +1,6 @@
-import { useState, useCallback } from "react";
-import type { PlatformDraft, PlatformId, PublishMode, PublishResult } from "@flash-promoter/core";
-import { defaultPublishMode } from "@flash-promoter/core";
+import { useState, useCallback, useEffect } from "react";
+import type { CanonicalPost, PlatformDraft, PlatformId, PublishMode, PublishResult } from "@flash-promoter/core";
+import { blocksToMarkdown, defaultPublishMode } from "@flash-promoter/core";
 import { api } from "../api/client.js";
 import { StepInput } from "./steps/StepInput.js";
 import { StepPlatforms } from "./steps/StepPlatforms.js";
@@ -8,25 +8,73 @@ import { StepGenerate } from "./steps/StepGenerate.js";
 import { StepEditConfirm } from "./steps/StepEditConfirm.js";
 import { StepValidatePublish } from "./steps/StepValidatePublish.js";
 import { StepResults } from "./steps/StepResults.js";
+import type { PublishResumeRequest } from "./FlowWizard.js";
 
 const userPlatforms: PlatformId[] = ["wechat", "bilibili", "zhihu-assist", "xhs-assist"];
 const steps = ["输入原稿", "选择平台", "生成内容包", "编辑确认", "发布", "完成"];
 
 type ImageItem = { id: string; dataUrl: string; filename: string; source: "upload" | "ai" };
 
-export function ArticleFlowWizard() {
+type Props = {
+  resumeRequest?: PublishResumeRequest | null;
+  onResumeConsumed?: () => void;
+};
+
+export function ArticleFlowWizard(props: Props = {}) {
   const [step, setStep] = useState(0);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
   const [body, setBody] = useState("");
   const [images, setImages] = useState<ImageItem[]>([]);
+  const [inputResetKey, setInputResetKey] = useState(0);
   const [selectedPlatforms, setSelectedPlatforms] = useState<PlatformId[]>([...userPlatforms]);
   const [currentPostId, setCurrentPostId] = useState<string | null>(null);
   const [drafts, setDrafts] = useState<PlatformDraft[]>([]);
   const [publishResults, setPublishResults] = useState<Record<string, PublishResult>>({});
 
   const showMessage = useCallback((msg: string) => { setMessage(msg); setTimeout(() => setMessage(null), 4000); }, []);
+
+  useEffect(() => {
+    const request = props.resumeRequest;
+    if (!request) return;
+    const postId = request.postId;
+
+    let cancelled = false;
+    async function resumePost() {
+      setBusy(true);
+      setMessage(null);
+      try {
+        const result = await api.post(postId);
+        if (cancelled) return;
+
+        const activeDrafts = result.drafts.filter((draft) => userPlatforms.includes(draft.platform));
+        const platforms = activeDrafts.map((draft) => draft.platform);
+
+        setCurrentPostId(result.post.id);
+        setBody(postToMarkdown(result.post));
+        setImages(postImages(result.post));
+        setInputResetKey((value) => value + 1);
+        setSelectedPlatforms(platforms.length > 0 ? platforms : [...userPlatforms]);
+        setDrafts(activeDrafts);
+        setPublishResults({});
+        setStep(activeDrafts.length > 0 ? 3 : 1);
+        showMessage(activeDrafts.length > 0 ? "已载入历史内容，可继续编辑平台版本" : "已载入历史内容，请重新生成平台版本");
+      } catch (error) {
+        if (!cancelled) {
+          setMessage(error instanceof Error ? error.message : "载入历史内容失败");
+        }
+      } finally {
+        if (!cancelled) {
+          setBusy(false);
+          props.onResumeConsumed?.();
+        }
+      }
+    }
+
+    void resumePost();
+    return () => { cancelled = true; };
+  }, [props.resumeRequest?.requestId, showMessage]);
 
   function handleConfirmInput(b: string, imgs: ImageItem[]) { setBody(b); setImages(imgs); setStep(1); }
 
@@ -104,12 +152,12 @@ export function ArticleFlowWizard() {
       <div className="stepper">{steps.map((label, i) => (<div key={label} className={`stepper-step ${i === step ? "current" : i < step ? "done" : ""}`}><span className="stepper-num">{i < step ? "✓" : i + 1}</span><span className="stepper-label">{label}</span></div>))}</div>
       {message ? <div className="wizard-banner">{message}</div> : null}
       <div className="step-body">
-        {step === 0 && <StepInput onConfirm={handleConfirmInput} />}
+        {step === 0 && <StepInput onConfirm={handleConfirmInput} initialBody={body} initialImages={images} resetKey={inputResetKey} />}
         {step === 1 && <StepPlatforms selected={selectedPlatforms} onToggle={(p) => setSelectedPlatforms((prev) => prev.includes(p) ? prev.filter((x) => x !== p) : [...prev, p])} onBack={() => setStep(0)} onGenerate={handleGenerate} busy={busy} canNext={canNext} />}
         {step === 2 && <StepGenerate selectedPlatforms={selectedPlatforms} busy={busy} />}
         {step === 3 && <StepEditConfirm drafts={drafts} selectedPlatforms={selectedPlatforms} busy={busy} onDraftsChange={setDrafts} onBack={() => setStep(1)} onNext={async () => { setBusy(true); const ok = await handleValidateAll(); setBusy(false); ok ? setStep(4) : setMessage("部分平台校验未通过"); }} canNext={canNext} />}
         {step === 4 && <StepValidatePublish drafts={drafts} busy={busy} onBack={() => setStep(3)} onPublish={handlePublishAll} allValid={drafts.every((d) => d.validation?.ok === true)} />}
-        {step === 5 && <StepResults drafts={drafts} results={publishResults} onBackToEdit={() => setStep(3)} onNewPost={() => { setStep(0); setBody(""); setDrafts([]); setPublishResults({}); }} />}
+        {step === 5 && <StepResults drafts={drafts} results={publishResults} onBackToEdit={() => setStep(3)} onNewPost={() => { setStep(0); setBody(""); setImages([]); setInputResetKey((value) => value + 1); setCurrentPostId(null); setDrafts([]); setPublishResults({}); }} />}
       </div>
     </div>
   );
@@ -122,6 +170,21 @@ function defaultModeForPlatform(platform: PlatformId): PublishMode {
 
 function tryParse(raw: string): Record<string, unknown> | null {
   try { return JSON.parse(raw.replace(/```json\s*/g, "").replace(/```\s*/g, "").trim()) as Record<string, unknown>; } catch { return null; }
+}
+
+function postToMarkdown(post: CanonicalPost): string {
+  return blocksToMarkdown(post.body);
+}
+
+function postImages(post: CanonicalPost): ImageItem[] {
+  return post.assets
+    .filter((asset) => asset.type === "image" && asset.dataUrl)
+    .map((asset) => ({
+      id: asset.id,
+      dataUrl: asset.dataUrl ?? "",
+      filename: asset.filename ?? "image.png",
+      source: "upload"
+    }));
 }
 
 export { userPlatforms as articlePlatforms };
