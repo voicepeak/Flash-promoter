@@ -23,6 +23,8 @@ export function FlowWizard(props: Props) {
     }
   }, [props.resumeRequest?.requestId]);
 
+  const handleReset = () => { setContentType(null); };
+
   if (!contentType) {
     return (
       <div className="wizard-shell">
@@ -42,6 +44,7 @@ export function FlowWizard(props: Props) {
       <ArticleFlowWizard
         resumeRequest={props.resumeRequest?.contentType === "article" ? props.resumeRequest : null}
         onResumeConsumed={props.onResumeConsumed}
+        onReset={handleReset}
       />
     );
   }
@@ -50,6 +53,7 @@ export function FlowWizard(props: Props) {
     <VideoFlowWizard
       resumeRequest={props.resumeRequest?.contentType === "video" ? props.resumeRequest : null}
       onResumeConsumed={props.onResumeConsumed}
+      onReset={handleReset}
     />
   );
 }

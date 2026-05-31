@@ -1,8 +1,22 @@
 import type { PlatformDraft, PublishResult } from "@flash-promoter/core";
 import { platformLabels } from "@flash-promoter/core";
-import { AlertTriangle, CheckCircle2, FileText, Info, RotateCcw, XCircle } from "lucide-react";
+import { AlertTriangle, CheckCircle2, ExternalLink, FileText, Info, RotateCcw, XCircle } from "lucide-react";
 
 type Props = { drafts: PlatformDraft[]; results: Record<string, PublishResult>; onBackToEdit: () => void; onNewPost: () => void };
+
+const platformLinks: Record<string, string> = {
+  bilibili: "https://member.bilibili.com/platform/upload/video/frame",
+  wechat: "https://mp.weixin.qq.com/mp/appmsgalbum?__biz=MzU3NTY2NzY2Ng==&action=showAlbum&album_id=0#wechat_redirect",
+  "zhihu-assist": "https://www.zhihu.com/creator/content/answer",
+  "xhs-assist": "https://creator.xiaohongshu.com/publish/publish"
+};
+
+const platformLinkLabels: Record<string, string> = {
+  bilibili: "前往B站创作中心发布",
+  wechat: "前往公众号草稿箱发布",
+  "zhihu-assist": "前往知乎创作者中心发布",
+  "xhs-assist": "前往小红书创作者中心发布"
+};
 
 const hints: Record<string, string> = {
   "invalid ip": "IP 不在白名单，请在平台后台添加本机出口 IP",
@@ -37,6 +51,11 @@ export function VideoResultStep(props: Props) {
               <div className="result-top">{ok ? <CheckCircle2 size={20} color="#0e7c66" /> : <XCircle size={20} color="#b13b2e" />}<div><strong>{platformLabels[draft.platform]}</strong><small>{result?.status ?? ""}{isReal ? " · 真实 API" : ""}</small></div></div>
               <p className="result-title">{draft.title}</p>
               {result?.message && <p className="result-msg">{result.message}</p>}
+              {platformLinks[draft.platform] && (
+                <a href={platformLinks[draft.platform]} target="_blank" rel="noopener noreferrer" className="result-msg" style={{ color: "var(--primary)", display: "flex", alignItems: "center", gap: 4, marginTop: 4 }}>
+                  <ExternalLink size={14} /> {platformLinkLabels[draft.platform] ?? "前往平台发布"}
+                </a>
+              )}
               {result?.errorMessage && (
                 <div className="result-error-block">
                   <p className="result-msg err">{result.errorMessage}</p>

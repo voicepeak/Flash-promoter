@@ -52,7 +52,7 @@ export function SettingsPage() {
   const [savingCred, setSavingCred] = useState<string | null>(null);
 
   // LLM
-  const [llmForm, setLlmForm] = useState({ enabled: false, baseUrl: "https://api.openai.com/v1", apiKeyEncrypted: "", model: "gpt-4o", temperature: 0.7, timeoutMs: 30000, maxTokens: 4096, imageBaseUrl: "", imageApiKey: "", imageModel: "dall-e-3", capabilities: { text: true, image: false, videoFrame: false, structuredOutput: true, longContext: true } as LlmModelCapabilities });
+  const [llmForm, setLlmForm] = useState({ enabled: false, baseUrl: "https://api.openai.com/v1", apiKeyEncrypted: "", model: "gpt-4o", timeoutMs: 30000, imageBaseUrl: "", imageApiKey: "", imageModel: "dall-e-3", capabilities: { text: true, image: false, videoFrame: false, structuredOutput: true, longContext: true } as LlmModelCapabilities });
   const [hasStoredKey, setHasStoredKey] = useState(false);
   const [hasStoredImageKey, setHasStoredImageKey] = useState(false);
   const [testing, setTesting] = useState(false);
@@ -62,7 +62,7 @@ export function SettingsPage() {
   const [storagePath, setStoragePath] = useState("data/flash-promoter.sqlite");
 
   useEffect(() => {
-    api.getLlmConfig().then((r) => { if (r.config.baseUrl) { const keyFromServer = r.config.apiKeyEncrypted ?? ""; const imgKeyFromServer = (r.config as Record<string, unknown>).imageApiKey as string ?? ""; setHasStoredKey(!!keyFromServer); setHasStoredImageKey(!!imgKeyFromServer); setLlmForm({ enabled: r.config.enabled, baseUrl: r.config.baseUrl, apiKeyEncrypted: "", model: r.config.model, temperature: r.config.temperature, timeoutMs: r.config.timeoutMs, maxTokens: r.config.maxTokens ?? 4096, imageBaseUrl: (r.config as Record<string, unknown>).imageBaseUrl as string ?? "", imageApiKey: "", imageModel: (r.config as Record<string, unknown>).imageModel as string ?? "dall-e-3", capabilities: r.config.capabilities }); } }).catch(() => {});
+    api.getLlmConfig().then((r) => { if (r.config.baseUrl) { const keyFromServer = r.config.apiKeyEncrypted ?? ""; const imgKeyFromServer = (r.config as Record<string, unknown>).imageApiKey as string ?? ""; setHasStoredKey(!!keyFromServer); setHasStoredImageKey(!!imgKeyFromServer); setLlmForm({ enabled: r.config.enabled, baseUrl: r.config.baseUrl, apiKeyEncrypted: "", model: r.config.model, timeoutMs: r.config.timeoutMs, imageBaseUrl: (r.config as Record<string, unknown>).imageBaseUrl as string ?? "", imageApiKey: "", imageModel: (r.config as Record<string, unknown>).imageModel as string ?? "dall-e-3", capabilities: r.config.capabilities }); } }).catch(() => {});
     api.getSafety().then((r) => { setGlobalSafety(r.realPublishEnabled); setPlatformSwitches(r.platformSwitches); setGuides(r.platformGuides.filter((g) => p0Platforms.includes(g.id as PlatformId))); }).catch(() => {});
     api.getPlatformAccounts().then((r) => setAccounts(r.accounts)).catch(() => {});
     api.storageInfo().then((r) => setStoragePath(r.dbPath || "data/flash-promoter.sqlite")).catch(() => {});
@@ -206,12 +206,10 @@ export function SettingsPage() {
           <div className="settings-row"><span>Base URL</span><input className="settings-input" value={llmForm.baseUrl} onChange={(e) => setLlmForm({ ...llmForm, baseUrl: e.target.value })} /></div>
           <div className="settings-row"><span>API Key</span><span style={{ display: "flex", gap: 8, alignItems: "center", flex: 1 }}><input className="settings-input" type="password" value={llmForm.apiKeyEncrypted} onChange={(e) => setLlmForm({ ...llmForm, apiKeyEncrypted: e.target.value })} placeholder={hasStoredKey ? "已保存，留空不修改" : "输入 API Key"} style={{ flex: 1 }} />{hasStoredKey ? <span style={{ color: "#0e7c66", fontSize: 12, whiteSpace: "nowrap" }}>已保存</span> : null}</span></div>
           <div className="settings-row"><span>Model</span><input className="settings-input" value={llmForm.model} onChange={(e) => setLlmForm({ ...llmForm, model: e.target.value })} /></div>
-          <div className="settings-row"><span>Temperature</span><input className="settings-input" type="number" min="0" max="2" step="0.1" value={llmForm.temperature} onChange={(e) => setLlmForm({ ...llmForm, temperature: Number(e.target.value) })} /></div>
           <div className="settings-row"><span>Timeout (ms)</span><input className="settings-input" type="number" value={llmForm.timeoutMs} onChange={(e) => setLlmForm({ ...llmForm, timeoutMs: Number(e.target.value) })} /></div>
-          <div className="settings-row"><span>Max Tokens</span><input className="settings-input" type="number" value={llmForm.maxTokens} onChange={(e) => setLlmForm({ ...llmForm, maxTokens: Number(e.target.value) })} /></div>
           <div className="settings-row"><span>模型能力</span><div className="capability-tags">{(["text", "image", "videoFrame"] as const).map((k) => (<label key={k} className="cap-tag"><input type="checkbox" checked={llmForm.capabilities[k]} onChange={(e) => setLlmForm({ ...llmForm, capabilities: { ...llmForm.capabilities, [k]: e.target.checked } })} />{k === "text" ? "文本" : k === "image" ? "图片" : "视频帧"}</label>))}</div></div>
           <div className="settings-row" style={{ borderTop: "1px dashed var(--line)", paddingTop: 10, marginTop: 6 }}>
-            <span style={{ fontWeight: 600 }}>🎨 AI 生图配置</span>
+            <span style={{ fontWeight: 600 }}>AI 生图配置</span>
           </div>
           <div className="settings-row"><span>生图 API URL</span><input className="settings-input" value={llmForm.imageBaseUrl} onChange={(e) => setLlmForm({ ...llmForm, imageBaseUrl: e.target.value })} placeholder="留空则复用 Base URL" /></div>
           <div className="settings-row"><span>生图 API Key</span><span style={{ display: "flex", gap: 8, alignItems: "center", flex: 1 }}><input className="settings-input" type="password" value={llmForm.imageApiKey} onChange={(e) => setLlmForm({ ...llmForm, imageApiKey: e.target.value })} placeholder={hasStoredImageKey ? "已保存，留空不修改" : "留空则复用主 API Key"} style={{ flex: 1 }} />{hasStoredImageKey ? <span style={{ color: "#0e7c66", fontSize: 12, whiteSpace: "nowrap" }}>已保存</span> : null}</span></div>
