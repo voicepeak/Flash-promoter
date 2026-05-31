@@ -4,11 +4,18 @@ import { createId, now } from "../models.js";
 
 export async function callLlm(config: LlmConfig, req: AiActionRequest): Promise<AiActionResult> {
   const prompt = buildAiPrompt(req);
+  const images = req.images ?? [];
+
+  const userContent: unknown[] = [{ type: "text", text: prompt }];
+  for (const img of images) {
+    userContent.push({ type: "image_url", image_url: { url: img, detail: "low" } });
+  }
+
   const body = JSON.stringify({
     model: config.model,
     messages: [
       { role: "system", content: "你是一个专业的内容创作助手，请只输出内容结果，不要添加解释。" },
-      { role: "user", content: prompt }
+      { role: "user", content: images.length > 0 ? userContent : prompt }
     ],
     temperature: config.temperature,
     max_tokens: config.maxTokens ?? 2048

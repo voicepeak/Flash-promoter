@@ -109,8 +109,8 @@ export function VideoFlowWizard(props: Props = {}) {
         finalTitle = videoFile.name.replace(/\.[^.]+$/, "");
       }
 
-      // Only run AI analysis if there's meaningful text content
-      const hasContent = script.trim().length > 5 || finalSummary.trim().length > 5 || finalTitle.trim().length > 0;
+      // Only run AI analysis if there's meaningful content or a video file to analyze
+      const hasContent = script.trim().length > 5 || finalSummary.trim().length > 5 || finalTitle.trim().length > 0 || videoFile !== null;
       let llmAvailable = false;
       try {
         const cfg = await api.getLlmConfig();
@@ -121,10 +121,19 @@ export function VideoFlowWizard(props: Props = {}) {
       if (llmAvailable && hasContent) {
         try {
           const scriptText = script.trim() || finalSummary || `${finalTitle}\n时长：${duration}\n分辨率：${resolution}`;
+          let frameImages: string[] | undefined;
+          if (videoFile) {
+            try {
+              frameImages = await extractVideoFrames(videoFile, 4);
+            } catch { /* frame extraction is best-effort */ }
+          }
+          // If no text but we have frames, build a minimal description from file metadata
+          const analysisText = scriptText.trim() || (videoFile ? `视频文件：${videoFile.name}\n时长：${duration}\n分辨率：${resolution}` : scriptText);
           const analysis = await api.aiAction({
             contentId: "generate-stage", action: "analyzeContent", contentType: "video",
-            currentValue: scriptText, slotKey: "video", fieldLabel: "视频分析",
-            inputContext: { platforms: selectedPlatforms, duration, resolution, videoFile: videoFile?.name ?? "" }
+            currentValue: analysisText, slotKey: "video", fieldLabel: "视频分析",
+            inputContext: { platforms: selectedPlatforms, duration, resolution, videoFile: videoFile?.name ?? "" },
+            images: frameImages
           });
           const json = tryParse(analysis.candidates[0] ?? "");
           if (json) {
@@ -232,4 +241,52 @@ function hydrateVideoPost(post: CanonicalPost, setters: VideoHydrationSetters) {
 
 function tryParse(raw: string): Record<string, unknown> | null {
   try { return JSON.parse(raw.replace(/```json\s*/g, "").replace(/```\s*/g, "").trim()) as Record<string, unknown>; } catch { return null; }
+}
+
+async function extractVideoFrames(file: File, count: number): Promise<string[]> {
+  return new Promise((resolve, reject) => {
+    const video = document.createElement("video");
+    video.preload = "metadata";
+    video.muted = true;
+    const url = URL.createObjectURL(file);
+
+    video.onloadedmetadata = async () => {
+      const duration = video.duration;
+      if (!duration || duration <= 0) { URL.revokeObjectURL(url); reject(new Error("Invalid video duration")); return; }
+
+      const canvas = document.createElement("canvas");
+      const ctx = canvas.getContext("2d");
+      if (!ctx) { URL.revokeObjectURL(url); reject(new Error("No canvas context")); return; }
+
+      const frames: string[] = [];
+      const seekPoints: number[] = [];
+      const step = duration / (count + 1);
+      for (let i = 1; i <= count; i++) {
+        seekPoints.push(step * i);
+      }
+
+      for (const seek of seekPoints) {
+        try {
+          await new Promise<void>((rs, rj) => {
+            const onSeek = () => {
+              video.removeEventListener("seeked", onSeek);
+              canvas.width = video.videoWidth || 320;
+              canvas.height = video.videoHeight || 240;
+              ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+              frames.push(canvas.toDataURL("image/jpeg", 0.7));
+              rs();
+            };
+            video.addEventListener("seeked", onSeek);
+            video.currentTime = seek;
+          });
+        } catch { /* skip failed frame */ }
+      }
+
+      URL.revokeObjectURL(url);
+      resolve(frames);
+    };
+
+    video.onerror = () => { URL.revokeObjectURL(url); reject(new Error("Video load error")); };
+    video.src = url;
+  });
 }
