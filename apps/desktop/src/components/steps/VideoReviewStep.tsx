@@ -45,7 +45,7 @@ export function VideoReviewStep(props: Props) {
               <label className="wide-field"><span>标签</span><input value={(draft.tags ?? []).join(", ")} onChange={(e) => update(draft.id, { tags: e.target.value.split(/[,，\n]/).map((s) => s.trim()).filter(Boolean) })} /></label>
             </div>
             <label className="wide-field" style={{ marginTop: 10 }}>
-              <span>正文</span>
+              <span>视频描述</span>
               <textarea style={{ height: 160 }} value={typeof draft.body === "string" ? draft.body : (draft.summary ?? "")}
                 onChange={(e) => update(draft.id, { body: e.target.value })} />
             </label>

@@ -97,7 +97,6 @@ export function VideoFlowWizard(props: Props = {}) {
       const tags = tagsText.split(/[,，\n]/).map((t) => t.trim()).filter(Boolean);
       const highlights = highlightsText.split(/[,，\n]/).map((h) => h.trim()).filter(Boolean);
 
-      // AI analysis at generate time (matching article flow)
       let finalTitle = title;
       let finalTopic = topic;
       let finalSummary = summary;
@@ -105,6 +104,13 @@ export function VideoFlowWizard(props: Props = {}) {
       let finalHighlights = highlights;
       let finalStyle = style;
 
+      // Fallback: use video filename if no title
+      if (!finalTitle.trim() && videoFile) {
+        finalTitle = videoFile.name.replace(/\.[^.]+$/, "");
+      }
+
+      // Only run AI analysis if there's meaningful text content
+      const hasContent = script.trim().length > 5 || finalSummary.trim().length > 5 || finalTitle.trim().length > 0;
       let llmAvailable = false;
       try {
         const cfg = await api.getLlmConfig();
@@ -112,9 +118,9 @@ export function VideoFlowWizard(props: Props = {}) {
         llmAvailable = !!(cfg?.config?.enabled && hasKey);
       } catch { llmAvailable = false; }
 
-      if (llmAvailable) {
+      if (llmAvailable && hasContent) {
         try {
-          const scriptText = script.trim() || `${title}\n${summary}`;
+          const scriptText = script.trim() || finalSummary || `${finalTitle}\n时长：${duration}\n分辨率：${resolution}`;
           const analysis = await api.aiAction({
             contentId: "generate-stage", action: "analyzeContent", contentType: "video",
             currentValue: scriptText, slotKey: "video", fieldLabel: "视频分析",
@@ -122,12 +128,12 @@ export function VideoFlowWizard(props: Props = {}) {
           });
           const json = tryParse(analysis.candidates[0] ?? "");
           if (json) {
-            finalTitle = String(json.title ?? title);
-            finalTopic = String(json.topic ?? topic);
-            finalSummary = String(json.summary ?? summary);
+            finalTitle = String(json.title ?? finalTitle);
+            finalTopic = String(json.topic ?? finalTopic);
+            finalSummary = String(json.summary ?? finalSummary);
             finalTags = Array.isArray(json.tags) ? json.tags.map(String) : finalTags;
             finalHighlights = Array.isArray(json.highlights) ? json.highlights.map(String) : finalHighlights;
-            finalStyle = String(json.style ?? style);
+            finalStyle = String(json.style ?? finalStyle);
             if (json.partitionSuggestion) {
               setPartitionSuggestion(String(json.partitionSuggestion));
             }
@@ -143,7 +149,7 @@ export function VideoFlowWizard(props: Props = {}) {
       setStyle(finalStyle);
 
       const created = await api.createVideoPost({
-        title: finalTitle, body: script, summary: finalSummary, tags: finalTags,
+        title: finalTitle, body: script || finalSummary, summary: finalSummary, tags: finalTags,
         topic: finalTopic, script, transcript: "", highlights: finalHighlights,
         style: finalStyle, contentType: "video", inputFormat: "markdown", assets: []
       });
