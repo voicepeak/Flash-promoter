@@ -124,7 +124,7 @@ export function VideoFlowWizard(props: Props = {}) {
           let frameImages: string[] | undefined;
           if (videoFile) {
             try {
-              frameImages = await extractVideoFrames(videoFile, 4);
+              frameImages = await extractVideoFrames(videoFile, 8);
             } catch { /* frame extraction is best-effort */ }
           }
           // If no text but we have frames, build a minimal description from file metadata
@@ -270,10 +270,10 @@ async function extractVideoFrames(file: File, count: number): Promise<string[]> 
           await new Promise<void>((rs, rj) => {
             const onSeek = () => {
               video.removeEventListener("seeked", onSeek);
-              canvas.width = video.videoWidth || 320;
-              canvas.height = video.videoHeight || 240;
-              ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-              frames.push(canvas.toDataURL("image/jpeg", 0.7));
+          canvas.width = video.videoWidth || 640;
+          canvas.height = video.videoHeight || 360;
+          ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+          frames.push(canvas.toDataURL("image/jpeg", 0.8));
               rs();
             };
             video.addEventListener("seeked", onSeek);
