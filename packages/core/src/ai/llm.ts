@@ -84,7 +84,35 @@ export function buildAiPrompt(req: AiActionRequest): string {
     generateFromImage: `请根据图片内容生成${field}。\n素材：\n${context}`,
     generateFromVideo: `请根据视频信息生成${field}。\n素材：\n${context}`,
     riskCheck: `请检查以下内容是否存在风险${platform}。\n内容：「${req.currentValue}」\n素材：\n${context}`,
-    analyzeContent: `请分析以下原始内容，提取各项元数据。必须严格按以下 JSON 格式输出，不要输出任何其他文字：
+    analyzeContent: req.contentType === "video"
+      ? `你是一个专业的视频内容分析专家。请仔细阅读以下视频脚本/字幕/描述文本，深入理解视频的核心内容、主题领域、目标受众和风格特点，提取准确的元数据。
+
+要求：
+- title: 生成一个吸引人且准确的标题，包含关键词，30字以内
+- topic: 视频所属的具体主题/领域（如：编程教程、美食评测、科技新闻等）
+- summary: 100字以内的精炼摘要，概括视频核心内容
+- tags: 3-8个精准标签，优先选择热门但有区分度的标签
+- highlights: 2-5个视频亮点或看点句子
+- style: 从以下选择最匹配的风格：knowledge(知识科普)、tutorial(教程)、review(评测)、vlog(生活记录)、entertainment(娱乐)、news(新闻资讯)、commentary(评论解说)、interview(访谈)
+- audience: 目标受众描述
+- partitionSuggestion: 对于B站等视频平台的分区建议（如：科技-计算机技术、生活-日常、游戏-单机游戏等，结合视频内容领域推荐）
+
+必须严格按以下 JSON 格式输出，不要输出任何其他文字：
+
+{
+  "title": "视频标题",
+  "topic": "主题领域",
+  "summary": "内容摘要",
+  "tags": ["标签1", "标签2", "标签3"],
+  "highlights": ["亮点1", "亮点2"],
+  "style": "knowledge",
+  "audience": "目标受众描述",
+  "partitionSuggestion": "分区建议"
+}
+
+视频内容：
+${req.currentValue}`
+      : `请分析以下原始内容，提取各项元数据。必须严格按以下 JSON 格式输出，不要输出任何其他文字：
 
 {
   "title": "提取或生成的标题",

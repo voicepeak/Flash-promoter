@@ -9,6 +9,7 @@ import { StepEditConfirm } from "./steps/StepEditConfirm.js";
 import { StepValidatePublish } from "./steps/StepValidatePublish.js";
 import { StepResults } from "./steps/StepResults.js";
 import type { PublishResumeRequest } from "./FlowWizard.js";
+import { Home } from "lucide-react";
 
 const userPlatforms: PlatformId[] = ["wechat", "bilibili", "zhihu-assist", "xhs-assist"];
 const steps = ["输入原稿", "选择平台", "生成内容包", "编辑确认", "发布", "完成"];
@@ -18,6 +19,7 @@ type ImageItem = { id: string; dataUrl: string; filename: string; source: "uploa
 type Props = {
   resumeRequest?: PublishResumeRequest | null;
   onResumeConsumed?: () => void;
+  onReset?: () => void;
 };
 
 export function ArticleFlowWizard(props: Props = {}) {
@@ -148,7 +150,7 @@ export function ArticleFlowWizard(props: Props = {}) {
 
   return (
     <div className="wizard-shell">
-      <header className="wizard-header"><div><span className="eyebrow">图文发布向导</span><h1>新建内容发布</h1></div></header>
+      <header className="wizard-header"><div><span className="eyebrow">图文发布向导</span><h1>新建内容发布</h1></div>{props.onReset ? <button type="button" className="text-button" onClick={props.onReset} title="返回首页"><Home size={18} /> 返回首页</button> : null}</header>
       <div className="stepper">{steps.map((label, i) => (<div key={label} className={`stepper-step ${i === step ? "current" : i < step ? "done" : ""}`}><span className="stepper-num">{i < step ? "✓" : i + 1}</span><span className="stepper-label">{label}</span></div>))}</div>
       {message ? <div className="wizard-banner">{message}</div> : null}
       <div className="step-body">

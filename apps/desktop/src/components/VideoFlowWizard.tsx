@@ -9,6 +9,7 @@ import { VideoReviewStep } from "./steps/VideoReviewStep.js";
 import { VideoValidateStep } from "./steps/VideoValidateStep.js";
 import { VideoResultStep } from "./steps/VideoResultStep.js";
 import type { PublishResumeRequest } from "./FlowWizard.js";
+import { Home } from "lucide-react";
 
 const videoSteps = ["上传视频", "选择平台", "生成发布包", "编辑确认", "发布前检查", "发布结果"];
 
@@ -17,6 +18,7 @@ const videoPlatforms: PlatformId[] = ["bilibili", "xhs-assist", "zhihu-assist", 
 type Props = {
   resumeRequest?: PublishResumeRequest | null;
   onResumeConsumed?: () => void;
+  onReset?: () => void;
 };
 
 export function VideoFlowWizard(props: Props = {}) {
@@ -34,6 +36,7 @@ export function VideoFlowWizard(props: Props = {}) {
   const [script, setScript] = useState("");
   const [highlightsText, setHighlightsText] = useState("");
   const [tagsText, setTagsText] = useState("");
+  const [partitionSuggestion, setPartitionSuggestion] = useState("");
   const [selectedPlatforms, setSelectedPlatforms] = useState<PlatformId[]>(["bilibili", "xhs-assist"]);
   const [currentPostId, setCurrentPostId] = useState<string | null>(null);
   const [drafts, setDrafts] = useState<PlatformDraft[]>([]);
@@ -88,16 +91,62 @@ export function VideoFlowWizard(props: Props = {}) {
     return () => { cancelled = true; };
   }, [props.resumeRequest?.requestId, showMessage]);
 
-  function handleAnalyzed(t: string, tp: string, s: string, tags: string[], hl: string[], st: string, sc: string, tt: string) {
-    setTitle(t); setTopic(tp); setSummary(s); setTagsText(tt); setHighlightsText(hl.join(", ")); setStyle(st); setScript(sc); setStep(1);
-  }
-
   async function handleGenerate() {
     setStep(2); setBusy(true); setMessage(null);
     try {
       const tags = tagsText.split(/[,，\n]/).map((t) => t.trim()).filter(Boolean);
       const highlights = highlightsText.split(/[,，\n]/).map((h) => h.trim()).filter(Boolean);
-      const created = await api.createVideoPost({ title, body: script, summary, tags, topic, script, transcript: "", highlights, style, contentType: "video", inputFormat: "markdown", assets: [] });
+
+      // AI analysis at generate time (matching article flow)
+      let finalTitle = title;
+      let finalTopic = topic;
+      let finalSummary = summary;
+      let finalTags = tags;
+      let finalHighlights = highlights;
+      let finalStyle = style;
+
+      let llmAvailable = false;
+      try {
+        const cfg = await api.getLlmConfig();
+        const hasKey = !!(cfg?.config?.apiKeyEncrypted);
+        llmAvailable = !!(cfg?.config?.enabled && hasKey);
+      } catch { llmAvailable = false; }
+
+      if (llmAvailable) {
+        try {
+          const scriptText = script.trim() || `${title}\n${summary}`;
+          const analysis = await api.aiAction({
+            contentId: "generate-stage", action: "analyzeContent", contentType: "video",
+            currentValue: scriptText, slotKey: "video", fieldLabel: "视频分析",
+            inputContext: { platforms: selectedPlatforms, duration, resolution, videoFile: videoFile?.name ?? "" }
+          });
+          const json = tryParse(analysis.candidates[0] ?? "");
+          if (json) {
+            finalTitle = String(json.title ?? title);
+            finalTopic = String(json.topic ?? topic);
+            finalSummary = String(json.summary ?? summary);
+            finalTags = Array.isArray(json.tags) ? json.tags.map(String) : finalTags;
+            finalHighlights = Array.isArray(json.highlights) ? json.highlights.map(String) : finalHighlights;
+            finalStyle = String(json.style ?? style);
+            if (json.partitionSuggestion) {
+              setPartitionSuggestion(String(json.partitionSuggestion));
+            }
+          }
+        } catch { /* LLM unavailable, use manual fields */ }
+      }
+
+      setTitle(finalTitle);
+      setTopic(finalTopic);
+      setSummary(finalSummary);
+      setTagsText(finalTags.join(", "));
+      setHighlightsText(finalHighlights.join(", "));
+      setStyle(finalStyle);
+
+      const created = await api.createVideoPost({
+        title: finalTitle, body: script, summary: finalSummary, tags: finalTags,
+        topic: finalTopic, script, transcript: "", highlights: finalHighlights,
+        style: finalStyle, contentType: "video", inputFormat: "markdown", assets: []
+      });
       setCurrentPostId(created.id);
       const generated = await api.generateVideoDrafts(created.id, selectedPlatforms);
       setDrafts(generated.items); setStep(3); showMessage("视频发布材料已生成");
@@ -137,16 +186,16 @@ export function VideoFlowWizard(props: Props = {}) {
 
   return (
     <div className="wizard-shell">
-      <header className="wizard-header"><div><span className="eyebrow">视频发布向导</span><h1>视频内容发布</h1></div></header>
+      <header className="wizard-header"><div><span className="eyebrow">视频发布向导</span><h1>视频内容发布</h1></div>{props.onReset ? <button type="button" className="text-button" onClick={props.onReset} title="返回首页"><Home size={18} /> 返回首页</button> : null}</header>
       <div className="stepper stepper-video">{videoSteps.map((label, i) => (<div key={label} className={`stepper-step ${i === step ? "current" : i < step ? "done" : ""}`}><span className="stepper-num">{i < step ? "✓" : i + 1}</span><span className="stepper-label">{label}</span></div>))}</div>
       {message ? <div className="wizard-banner">{message}</div> : null}
       <div className="step-body">
-        {step === 0 && <VideoInfoStep videoFile={videoFile} duration={duration} resolution={resolution} onFileChange={setVideoFile} onDurationChange={setDuration} onResolutionChange={setResolution} onAnalyzed={handleAnalyzed} onBack={() => {}} />}
+        {step === 0 && <VideoInfoStep videoFile={videoFile} duration={duration} resolution={resolution} onFileChange={setVideoFile} onDurationChange={setDuration} onResolutionChange={setResolution} script={script} onScriptChange={setScript} onNext={() => setStep(1)} onBack={() => {}} />}
         {step === 1 && <VideoPlatformSelectStep selected={selectedPlatforms} onToggle={(p) => setSelectedPlatforms((prev) => prev.includes(p) ? prev.filter((x) => x !== p) : [...prev, p])} onBack={() => setStep(0)} onGenerate={handleGenerate} busy={busy} canNext={canNext} />}
         {step === 2 && <VideoGenerateStep selectedPlatforms={selectedPlatforms} busy={busy} />}
         {step === 3 && <VideoReviewStep drafts={drafts} selectedPlatforms={selectedPlatforms} busy={busy} onDraftsChange={setDrafts} onBack={() => setStep(1)} onNext={async () => { setBusy(true); const ok = await handleValidateAll(); setBusy(false); ok ? setStep(4) : setMessage("部分平台校验未通过"); }} canNext={canNext} />}
         {step === 4 && <VideoValidateStep drafts={drafts} busy={busy} onBack={() => setStep(3)} onPublish={handlePublishAll} allValid={drafts.every((d) => d.validation?.ok === true)} />}
-        {step === 5 && <VideoResultStep drafts={drafts} results={publishResults} onBackToEdit={() => setStep(3)} onNewPost={() => { setStep(0); setVideoFile(null); setTitle(""); setTopic(""); setSummary(""); setScript(""); setHighlightsText(""); setTagsText(""); setCurrentPostId(null); setDrafts([]); setPublishResults({}); }} />}
+        {step === 5 && <VideoResultStep drafts={drafts} results={publishResults} onBackToEdit={() => setStep(3)} onNewPost={() => { setStep(0); setVideoFile(null); setTitle(""); setTopic(""); setSummary(""); setScript(""); setHighlightsText(""); setTagsText(""); setPartitionSuggestion(""); setCurrentPostId(null); setDrafts([]); setPublishResults({}); }} />}
       </div>
     </div>
   );
@@ -173,4 +222,8 @@ function hydrateVideoPost(post: CanonicalPost, setters: VideoHydrationSetters) {
   setters.setScript(String(raw.script ?? blocksToMarkdown(post.body)));
   setters.setTagsText(post.tags.join(", "));
   setters.setHighlightsText(highlights.join(", "));
+}
+
+function tryParse(raw: string): Record<string, unknown> | null {
+  try { return JSON.parse(raw.replace(/```json\s*/g, "").replace(/```\s*/g, "").trim()) as Record<string, unknown>; } catch { return null; }
 }

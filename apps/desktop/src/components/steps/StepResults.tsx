@@ -9,6 +9,20 @@ type Props = {
   onNewPost: () => void;
 };
 
+const platformLinks: Record<string, string> = {
+  bilibili: "https://member.bilibili.com/platform/upload/video/frame",
+  wechat: "https://mp.weixin.qq.com/mp/appmsgalbum?__biz=MzU3NTY2NzY2Ng==&action=showAlbum&album_id=0#wechat_redirect",
+  "zhihu-assist": "https://www.zhihu.com/creator/content/answer",
+  "xhs-assist": "https://creator.xiaohongshu.com/publish/publish"
+};
+
+const platformLinkLabels: Record<string, string> = {
+  bilibili: "前往B站创作中心发布",
+  wechat: "前往公众号草稿箱发布",
+  "zhihu-assist": "前往知乎创作者中心发布",
+  "xhs-assist": "前往小红书创作者中心发布"
+};
+
 const errorHints: Record<string, string> = {
   "invalid ip": "当前 IP 不在平台的 IP 白名单中。请在平台后台「基本配置」→「IP 白名单」中添加本机出口 IP。",
   "not in whitelist": "IP 白名单校验失败。请前往平台后台添加当前 IP 到白名单。",
@@ -67,8 +81,10 @@ export function StepResults(props: Props) {
               </div>
               <p className="result-title">{draft.title}</p>
               {result?.message && <p className="result-msg">{result.message}</p>}
-              {result?.url && draft.platform === "wechat" && (
-                <a href={result.url} target="_blank" rel="noopener noreferrer" className="result-msg" style={{ color: "var(--primary)", display: "flex", alignItems: "center", gap: 4, marginTop: 4 }}><ExternalLink size={14} /> 前往公众号后台发布草稿</a>
+              {platformLinks[draft.platform] && (
+                <a href={platformLinks[draft.platform]} target="_blank" rel="noopener noreferrer" className="result-msg" style={{ color: "var(--primary)", display: "flex", alignItems: "center", gap: 4, marginTop: 4 }}>
+                  <ExternalLink size={14} /> {platformLinkLabels[draft.platform] ?? "前往平台发布"}
+                </a>
               )}
               {result?.errorMessage && (
                 <div className="result-error-block">

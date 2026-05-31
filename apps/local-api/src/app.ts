@@ -299,21 +299,16 @@ export function createApp(repository: FlashPromoterRepository, options: { dbPath
 
     let drafts: PlatformDraft[];
 
-    const llmPost2 = repository.getPost(llmConfigKey);
-    let llmConfig2: LlmConfig | null = null;
-    if (llmPost2) {
-      try { llmConfig2 = JSON.parse((llmPost2.body[0] as { text?: string }).text ?? "{}") as LlmConfig; } catch {}
-    }
-    const useLlm2 = !!(llmConfig2?.enabled && llmConfig2.apiKeyEncrypted && llmConfig2.baseUrl);
+    const useLlm = !!(llmConfig?.enabled && llmConfig.apiKeyEncrypted && llmConfig.baseUrl);
 
-    if (useLlm2 && llmConfig2) {
+    if (useLlm && llmConfig) {
       const body = (input.script ?? input.transcript ?? input.summary ?? "");
       drafts = [];
       for (const platform of platforms) {
         if (platform === "mock") continue;
         const prompt = buildPlatformGenerationPrompt(platform, input.title, body, input.summary ?? "", input.tags);
         try {
-          const res = await callLlm(llmConfig2, {
+          const res = await callLlm(llmConfig, {
             contentId: post.id, action: "generate", contentType: "video",
             currentValue: prompt, slotKey: platform, fieldLabel: platform,
             inputContext: { title: input.title, body, summary: input.summary, tags: input.tags, topic: input.topic }
@@ -634,7 +629,6 @@ export function createApp(repository: FlashPromoterRepository, options: { dbPath
     const stored = existing ? parseStoredLlmConfig(existing) : null;
     const storedKey = stored?.apiKeyEncrypted ?? "";
     const storedImageKey = stored?.imageApiKey ?? "";
-    // If the client sent a masked key (contains ****) or empty, keep the real stored key
     const keyToSave = isNewSecret(incomingKey) ? incomingKey : storedKey;
     const imageKeyToSave = isNewSecret(incomingImageKey) ? incomingImageKey : storedImageKey;
     const config = createLlmConfig({
@@ -643,9 +637,9 @@ export function createApp(repository: FlashPromoterRepository, options: { dbPath
       baseUrl: String(body.baseUrl ?? ""),
       apiKeyEncrypted: keyToSave,
       model: String(body.model ?? "gpt-4o"),
-      temperature: Number(body.temperature ?? 0.7),
+      temperature: 0.7,
       timeoutMs: Number(body.timeoutMs ?? 30000),
-      maxTokens: body.maxTokens ? Number(body.maxTokens) : undefined,
+      maxTokens: 4096,
       imageBaseUrl: String(body.imageBaseUrl ?? stored?.imageBaseUrl ?? ""),
       imageApiKey: imageKeyToSave,
       imageModel: String(body.imageModel ?? stored?.imageModel ?? "dall-e-3"),
@@ -929,11 +923,6 @@ function accountFor(platform: PlatformId, credStore: FlashPromoterRepository): P
   };
 }
 
-function maskKey(key: string): string {
-  if (!key || key.length < 8) return key;
-  return key.slice(0, 4) + "****" + key.slice(-4);
-}
-
 function parseStoredLlmConfig(post: { body?: unknown }): LlmConfig {
   try {
     const body = Array.isArray(post.body) ? post.body : [];
@@ -942,6 +931,11 @@ function parseStoredLlmConfig(post: { body?: unknown }): LlmConfig {
   } catch {
     return createLlmConfig();
   }
+}
+
+function maskKey(key: string): string {
+  if (!key || key.length < 8) return key;
+  return key.slice(0, 4) + "****" + key.slice(-4);
 }
 
 function maskLlmConfig(config: LlmConfig): LlmConfig {
