@@ -8,7 +8,7 @@ export async function callLlm(config: LlmConfig, req: AiActionRequest): Promise<
 
   const userContent: unknown[] = [{ type: "text", text: prompt }];
   for (const img of images) {
-    userContent.push({ type: "image_url", image_url: { url: img, detail: "low" } });
+    userContent.push({ type: "image_url", image_url: { url: img } });
   }
 
   const body = JSON.stringify({
