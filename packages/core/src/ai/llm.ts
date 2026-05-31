@@ -39,6 +39,7 @@ export type AiActionRequest = {
   fieldLabel?: string;
   currentValue: string;
   inputContext: Record<string, unknown>;
+  images?: string[];
 };
 
 export type AiActionResult = {
@@ -85,11 +86,13 @@ export function buildAiPrompt(req: AiActionRequest): string {
     generateFromVideo: `请根据视频信息生成${field}。\n素材：\n${context}`,
     riskCheck: `请检查以下内容是否存在风险${platform}。\n内容：「${req.currentValue}」\n素材：\n${context}`,
     analyzeContent: req.contentType === "video"
-      ? `你是一个专业的视频内容分析专家。请仔细阅读以下视频脚本/字幕/描述文本，深入理解视频的核心内容、主题领域、目标受众和风格特点，提取准确的元数据。
+      ? `你是一个专业的视频内容分析专家。请仔细分析提供的视频截图帧和文本描述，深入理解视频的核心内容、主题领域、目标受众和风格特点，提取准确的元数据。
+
+${req.images?.length ? `已提供 ${req.images.length} 张视频截图帧供参考分析。` : ""}
 
 要求：
 - title: 生成一个吸引人且准确的标题，包含关键词，30字以内
-- topic: 视频所属的具体主题/领域（如：编程教程、美食评测、科技新闻等）
+- topic: 视频所属的具体主题/领域（如：编程教程、美食评测、科技新闻、游戏实况、生活vlog等）
 - summary: 100字以内的精炼摘要，概括视频核心内容
 - tags: 3-8个精准标签，优先选择热门但有区分度的标签
 - highlights: 2-5个视频亮点或看点句子
@@ -110,7 +113,7 @@ export function buildAiPrompt(req: AiActionRequest): string {
   "partitionSuggestion": "分区建议"
 }
 
-视频内容：
+视频描述文本：
 ${req.currentValue}`
       : `请分析以下原始内容，提取各项元数据。必须严格按以下 JSON 格式输出，不要输出任何其他文字：
 

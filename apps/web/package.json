@@ -1,0 +1,10 @@
+{
+  "name": "@flash-promoter/web",
+  "version": "0.1.0",
+  "private": true,
+  "description": "flash-promoter product landing page",
+  "scripts": {
+    "dev": "npx serve . -p 3334",
+    "start": "npx serve . -p 3334"
+  }
+}

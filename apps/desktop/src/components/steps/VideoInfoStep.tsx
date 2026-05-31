@@ -15,7 +15,7 @@ export function VideoInfoStep(props: Props) {
   return (
     <div className="step-panel">
       <h2>填写视频信息</h2>
-      <p className="step-desc">选择视频文件，粘贴脚本或内容描述。AI 分析将在选择平台后自动执行。</p>
+      <p className="step-desc">选择视频文件，可选粘贴脚本或内容描述。AI 将通过截图帧识别视频画面内容，并基于选择的平台进行分析。</p>
 
       <div className="video-dropzone" style={{ marginBottom: 14 }} onClick={() => ref.current?.click()}>
         <input ref={ref} type="file" accept="video/*" style={{ display: "none" }} onChange={(e) => props.onFileChange(e.target.files?.[0] ?? null)} />

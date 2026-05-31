@@ -302,10 +302,16 @@ export function createApp(repository: FlashPromoterRepository, options: { dbPath
     const useLlm = !!(llmConfig?.enabled && llmConfig.apiKeyEncrypted && llmConfig.baseUrl);
 
     if (useLlm && llmConfig) {
-      const body = (input.script ?? input.transcript ?? input.summary ?? "");
+      const body = (input.script ?? input.transcript ?? input.summary ?? "").trim();
+      const hasEnoughContent = body.length >= 5 || (input.title ?? "").length >= 3;
       drafts = [];
       for (const platform of platforms) {
         if (platform === "mock") continue;
+        if (!hasEnoughContent) {
+          const fallback = generateVideoPlatformAdaptation(input, [platform]);
+          drafts.push(...fallback);
+          continue;
+        }
         const prompt = buildPlatformGenerationPrompt(platform, input.title, body, input.summary ?? "", input.tags);
         try {
           const res = await callLlm(llmConfig, {
