@@ -1,8 +1,9 @@
 name: Deploy Landing Page to GitHub Pages
 
 on:
+  workflow_dispatch:
   push:
-    branches: [continue]
+    branches: [main]
     paths:
       - 'apps/web/**'
 
